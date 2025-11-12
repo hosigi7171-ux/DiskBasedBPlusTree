@@ -1,13 +1,8 @@
 #ifndef FILE_H
 #define FILE_H
 
-#include <cstdint>
+#include "page.h"
 
-// file.h
-typedef uint64_t pagenum_t;
-struct page_t {
-  // in-memory page structure
-};
 // Allocate an on-disk page from the free page list
 pagenum_t file_alloc_page();
 // Free an on-disk page to the free page list
