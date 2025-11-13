@@ -8,7 +8,7 @@ typedef uint64_t magicnum_t;
 
 #define PAGE_SIZE 4096
 #define ORIGIN_HEADER_PAGE_RESERVED 4072
-#define HEADER_PAGE_RESERVED 4032
+#define HEADER_PAGE_RESERVED 4040
 #define NON_HEADER_PAGE_RESERVED 104
 #define VALUE_SIZE 120
 #define RECORDS_CNT 31
@@ -29,15 +29,15 @@ typedef uint64_t magicnum_t;
 
 // my header
 typedef struct {
+  // Legacy Fields (for compatibility with original Requirements)
   pagenum_t free_page_num; // 0 if end of free list
   pagenum_t root_page_num;
   pagenum_t num_of_pages;
-  // reserved space
-  magicnum_t magic_num;
+  // New Fields (Custom Design & Optimization)
+  magicnum_t magic_num; // Field to distinguish from legacy version
   pagenum_t free_internal_head;
   pagenum_t free_leaf_head;
-  pagenum_t internal_start;
-  pagenum_t leaf_start;
+  pagenum_t internal_next_alloc;
   char reserved[HEADER_PAGE_RESERVED];
 } header_page_t;
 
