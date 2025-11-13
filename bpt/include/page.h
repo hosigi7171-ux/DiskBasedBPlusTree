@@ -4,25 +4,47 @@
 #include <stdint.h>
 
 typedef uint64_t pagenum_t;
+typedef uint64_t magicnum_t;
 
 #define PAGE_SIZE 4096
-#define HEADER_PAGE_RESERVED 4072
+#define ORIGIN_HEADER_PAGE_RESERVED 4072
+#define HEADER_PAGE_RESERVED 4032
 #define NON_HEADER_PAGE_RESERVED 104
 #define VALUE_SIZE 120
 #define RECORDS_CNT 31
 #define ENTRY_CNT 248
+#define UNUSED_SIZE 4088
+#define MAGIC_NUM 0x20251113
+#define LEAF 1
+#define INTERNAL 0
+#define INITIAL_INTERNAL_CAPACITY 1000
 
-// header page
+// // other's header page
+// typedef struct {
+//   pagenum_t free_page_num;
+//   pagenum_t root_page_num;
+//   pagenum_t num_of_pages;
+//   char reserved[HEADER_PAGE_RESERVED]; // not used
+// } header_page_t;
+
+// my header
 typedef struct {
-  pagenum_t free_page_num;
+  pagenum_t free_page_num; // 0 if end of free list
   pagenum_t root_page_num;
   pagenum_t num_of_pages;
-  char reserved[HEADER_PAGE_RESERVED];  // not used
+  // reserved space
+  magicnum_t magic_num;
+  pagenum_t free_internal_head;
+  pagenum_t free_leaf_head;
+  pagenum_t internal_start;
+  pagenum_t leaf_start;
+  char reserved[HEADER_PAGE_RESERVED];
 } header_page_t;
 
 // free page
 typedef struct {
   pagenum_t next_free_page_num;
+  char unused[UNUSED_SIZE];
 } free_page_t;
 
 // key-value record
@@ -41,10 +63,10 @@ typedef struct {
 typedef struct {
   // header
   pagenum_t parent_page_num;
-  uint32_t is_leaf;  // 1
+  uint32_t is_leaf; // 1
   uint32_t num_of_keys;
-  char reserved[NON_HEADER_PAGE_RESERVED];  // not used
-  pagenum_t right_sibling_page_num;         // if rihgtmost, 0
+  char reserved[NON_HEADER_PAGE_RESERVED]; // not used
+  pagenum_t right_sibling_page_num;        // if rihgtmost, 0
 
   record_t records[RECORDS_CNT];
 } leaf_page_t;
@@ -53,10 +75,10 @@ typedef struct {
 typedef struct {
   // header
   pagenum_t parent_page_num;
-  int32_t is_leaf;  // 0
+  int32_t is_leaf; // 0
   int32_t num_of_keys;
-  char reserved[NON_HEADER_PAGE_RESERVED];  // not used
-  pagenum_t one_more_page_num;  // leftmost page num to know key ranges
+  char reserved[NON_HEADER_PAGE_RESERVED]; // not used
+  pagenum_t one_more_page_num; // leftmost page num to know key ranges
 
   entry_t entries[ENTRY_CNT];
 } internal_page_t;
