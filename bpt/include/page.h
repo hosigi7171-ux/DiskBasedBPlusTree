@@ -18,6 +18,8 @@ typedef uint64_t magicnum_t;
 #define LEAF 1
 #define INTERNAL 0
 #define INITIAL_INTERNAL_CAPACITY 1000
+#define PAGE_NULL 0
+#define HEADER_PAGE_POS 1
 
 // // other's header page
 // typedef struct {
@@ -82,6 +84,14 @@ typedef struct {
 
   entry_t entries[ENTRY_CNT];
 } internal_page_t;
+
+// page header - for referencing header
+typedef struct {
+  pagenum_t parent_page_num;
+  uint32_t is_leaf;
+  uint32_t num_of_keys;
+  char reserved[NON_HEADER_PAGE_RESERVED];
+} page_header_t;
 
 // raw page for type casting
 typedef struct {
