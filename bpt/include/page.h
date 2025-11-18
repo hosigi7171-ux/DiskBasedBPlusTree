@@ -11,8 +11,12 @@ typedef uint64_t magicnum_t;
 #define HEADER_PAGE_RESERVED 4040
 #define NON_HEADER_PAGE_RESERVED 104
 #define VALUE_SIZE 120
-#define RECORDS_CNT 31
+#ifndef RECORD_CNT
+#define RECORD_CNT 31
+#endif
+#ifndef ENTRY_CNT
 #define ENTRY_CNT 248
+#endif
 #define UNUSED_SIZE 4088
 #define MAGIC_NUM 0x20251113
 #define LEAF 1
@@ -70,7 +74,7 @@ typedef struct {
   char reserved[NON_HEADER_PAGE_RESERVED]; // not used
   pagenum_t right_sibling_page_num;        // if rihgtmost, 0
 
-  record_t records[RECORDS_CNT];
+  record_t records[RECORD_CNT];
 } leaf_page_t;
 
 // internal page
