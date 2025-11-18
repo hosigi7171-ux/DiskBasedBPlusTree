@@ -5,9 +5,11 @@
 
 // Uncomment the line below if you are compiling on Windows.
 // #define WINDOWS
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef WINDOWS
 #define bool char
 #define false 0
@@ -22,8 +24,13 @@
 #define MIN_ORDER 3
 #define MAX_ORDER 20
 
-#define LEAF_ORDER RECORDS_CNT + 1
+#define LEAF_ORDER RECORD_CNT + 1
 #define INTERNAL_ORDER ENTRY_CNT + 1
+#define SUCCESS 1
+#define FAILURE 0
+#define CANNOT_ROOT -2
+#define MAX_RANGE_SIZE 500 // for finding range
+#define MIN_KEYS 1         // for delayed merge
 
 // Constants for printing part or all of the GPL license.
 #define LICENSE_FILE "LICENSE.txt"
@@ -55,7 +62,11 @@ extern int order;
  * printing each entire rank on a separate
  * line, finishing with the leaves.
  */
-// extern pagenum_t queue;
+typedef struct queue {
+  pagenum_t page_num;
+  int level;
+  struct queue *next;
+} queue;
 
 /* The user can toggle on and off the "verbose"
  * property, which causes the pointer addresses
@@ -73,16 +84,17 @@ void print_license(int licence_part);
 void usage_1(void);
 void usage_2(void);
 void usage_3(void);
-void enqueue(pagenum_t new_node);
-pagenum_t dequeue(void);
-int height(pagenum_t root);
-int path_to_root(pagenum_t root, pagenum_t child);
-void print_leaves(pagenum_t root);
-void print_tree(pagenum_t root);
-void find_and_print(pagenum_t root, int key, bool verbose);
-void find_and_print_range(pagenum_t root, int range1, int range2, bool verbose);
-int find_range(pagenum_t root, int key_start, int key_end, bool verbose,
-               int returned_keys[], void *returned_pointers[]);
+void enqueue(pagenum_t new_page_num, int level);
+queue *dequeue(void);
+int height(pagenum_t header_page_num);
+void print_leaves(void);
+void print_tree();
+void find_and_print(pagenum_t root_num, int64_t key);
+void find_and_print_range(pagenum_t root_num, int64_t key_start,
+                          int64_t key_end);
+int find_range(pagenum_t root_num, int64_t key_start, int64_t key_end,
+               int64_t returned_keys[], pagenum_t returned_pages[],
+               int returned_indices[]);
 pagenum_t find_leaf(pagenum_t root, int64_t key);
 char *find(pagenum_t root, int64_t key, char *result_buf);
 int cut(int length);
@@ -91,8 +103,6 @@ int cut(int length);
 
 record_t *make_record(char *value);
 pagenum_t make_node(uint32_t isleaf);
-// pagenum_t make_node(void);
-// pagenum_t make_leaf(void);
 pagenum_t make_leaf(void);
 int get_index_after_left_child(page_t *parent_buffer, pagenum_t left_num);
 pagenum_t insert_into_leaf(pagenum_t leaf_num, page_t *leaf_buffer, int64_t key,
@@ -114,17 +124,21 @@ pagenum_t insert(pagenum_t root, int64_t key, char *value);
 
 // Deletion.
 
-int get_neighbor_index(pagenum_t n);
+int get_kprime_index(pagenum_t target_node);
+int remove_record_from_node(leaf_page_t *target_page, int64_t key, char *value);
+int remove_entry_from_node(internal_page_t *target_page, int64_t key);
 pagenum_t adjust_root(pagenum_t root);
-pagenum_t coalesce_nodes(pagenum_t root, pagenum_t n, pagenum_t neighbor,
-                         int neighbor_index, int k_prime);
-pagenum_t redistribute_nodes(pagenum_t root, pagenum_t n, pagenum_t neighbor,
-                             int neighbor_index, int k_prime_index,
-                             int k_prime);
-pagenum_t delete_entry(pagenum_t root, pagenum_t n, int key, void *pointer);
-pagenum_t delete (pagenum_t root, int key);
+pagenum_t coalesce_nodes(pagenum_t root, pagenum_t target_num,
+                         pagenum_t neighbor_num, int kprime_index_from_get,
+                         int64_t k_prime);
+pagenum_t redistribute_nodes(pagenum_t root, pagenum_t target_num,
+                             pagenum_t neighbor_num, int kprime_index_from_get,
+                             int k_prime_index, int k_prime);
+pagenum_t delete_entry(pagenum_t root, pagenum_t target_node, int64_t key,
+                       char *value);
+pagenum_t delete (pagenum_t root, int64_t key);
 
 void destroy_tree_nodes(pagenum_t root);
-pagenum_t destroy_tree(pagenum_t root);
+void destroy_tree(void);
 
 #endif /* __BPT_H__*/
