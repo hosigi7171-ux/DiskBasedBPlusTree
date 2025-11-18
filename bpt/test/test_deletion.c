@@ -10,8 +10,8 @@
 #define ENTRY_CNT 4
 #define MIN_KEYS 1
 
-#define SUCCESS 1
-#define FAILURE 0
+#define SUCCESS 0
+#define FAILURE 1
 
 #define HEADER_PAGE_NUM 1
 #define PAGE_SIZE 4096
@@ -47,7 +47,6 @@ void MOCK_file_write_page(pagenum_t pagenum, const page_t *src, int num_calls) {
  */
 void test_delete_root_becomes_empty(void) {
   pagenum_t ROOT_NUM = 2;
-  pagenum_t NEW_ROOT;
   const char *DELETE_VALUE = "val5";
 
   // 1. Initial Setup: Root(P2)
@@ -69,9 +68,10 @@ void test_delete_root_becomes_empty(void) {
   // P2는 루트이며 키 0개가 되므로 해제되어야 함
   file_free_page_Expect(ROOT_NUM);
 
-  NEW_ROOT = delete_entry(ROOT_NUM, ROOT_NUM, 5, DELETE_VALUE);
+  delete_entry(ROOT_NUM, 5, DELETE_VALUE);
 
   // Verification
+  pagenum_t NEW_ROOT = h0->root_page_num;
   TEST_ASSERT_EQUAL_HEX64(PAGE_NULL, NEW_ROOT);
 
   file_read_page(HEADER_PAGE_NUM, (page_t *)h0);
@@ -124,9 +124,10 @@ void test_delete_leaf_redistribution_R_to_L(void) {
   file_read_page_Stub(MOCK_file_read_page);
   file_write_page_Stub(MOCK_file_write_page);
 
-  pagenum_t NEW_ROOT = delete_entry(ROOT_NUM, P4, 4, DELETE_VALUE);
+  delete_entry(P4, 4, DELETE_VALUE);
 
   // Verification
+  pagenum_t NEW_ROOT = h0->root_page_num;
   TEST_ASSERT_EQUAL_HEX64(ROOT_NUM, NEW_ROOT);
 
   // check target status
@@ -195,7 +196,7 @@ void test_delete_leaf_coalesce_swap_R_to_L(void) {
   file_free_page_Expect(P4);
   file_free_page_Expect(ROOT_NUM);
 
-  pagenum_t NEW_ROOT = delete_entry(ROOT_NUM, P3, 3, DELETE_VALUE);
+  pagenum_t NEW_ROOT = delete_entry(P3, 3, DELETE_VALUE);
 
   // 3. Verification
   TEST_ASSERT_EQUAL_HEX64(P3, NEW_ROOT);
@@ -275,9 +276,10 @@ void test_delete_internal_coalesce(void) {
   file_free_page_Expect(P4);
   file_free_page_Expect(ROOT_NUM);
 
-  pagenum_t NEW_ROOT = delete_entry(ROOT_NUM, P4, 60, NULL);
+  delete_entry(P4, 60, NULL);
 
   // Verification
+  pagenum_t NEW_ROOT = h0->root_page_num;
   TEST_ASSERT_EQUAL_HEX64(P3, NEW_ROOT);
 
   // check target status
@@ -350,10 +352,10 @@ void test_delete_leaf_redistribute_when_target_is_empty(void) {
   // EXPECTATION: No pages should be freed (Redistribution).
   // file_free_page_Expect(...) 없음
 
-  pagenum_t NEW_ROOT = delete_entry(ROOT_NUM, P4, 50, DELETE_VALUE);
+  delete_entry(P4, 50, DELETE_VALUE);
 
   // Verification
-
+  pagenum_t NEW_ROOT = h0->root_page_num;
   TEST_ASSERT_EQUAL_HEX64(ROOT_NUM, NEW_ROOT);
 
   // check target status
