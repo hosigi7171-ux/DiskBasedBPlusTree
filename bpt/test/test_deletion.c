@@ -1,5 +1,6 @@
 
 #include "bpt.h"
+#include "helper_mock.h"
 #include "mock_file.h"
 #include "page.h"
 #include <stdio.h>
@@ -19,28 +20,8 @@
 #define LEAF 1
 #define INTERNAL 0
 
-/**
- * Mock Data Store
- */
-
-#define MAX_MOCK_PAGES 10
-page_t MOCK_PAGES[MAX_MOCK_PAGES];
-
-// 테스트 케이스마다 실행
-void setUp(void) { memset(MOCK_PAGES, 0, sizeof(MOCK_PAGES)); }
+void setUp(void) { setup_data_store(); }
 void tearDown(void) {}
-
-void MOCK_file_read_page(pagenum_t pagenum, page_t *dest, int num_calls) {
-  if (pagenum > 0 && pagenum < MAX_MOCK_PAGES) {
-    memcpy(dest, &MOCK_PAGES[pagenum], PAGE_SIZE);
-  }
-}
-
-void MOCK_file_write_page(pagenum_t pagenum, const page_t *src, int num_calls) {
-  if (pagenum > 0 && pagenum < MAX_MOCK_PAGES) {
-    memcpy(&MOCK_PAGES[pagenum], src, PAGE_SIZE);
-  }
-}
 
 /**
  * @brief Root(Leaf)에 키가 하나만 있을 때, 삭제 후 루트가 NULL이 되는지 확인
