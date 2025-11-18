@@ -73,7 +73,7 @@ delete
 
 =>
 
-[Disk Space Management Layer]
+[File and Disk Space Management Layer]
 (file.c)
 - file_alloc_page()
 - file_free_page()
