@@ -14,8 +14,18 @@ int global_table_id = -1;
 int open_table(char *pathname) {
   mode_t mode = 0600; // only owner rw
   if ((fd = open(DB_NAME, O_RDWR | O_CREAT, mode)) == -1) {
-    return -1;
+    return FAILURE;
   }
+
+  // setup metadata (header_page)
+  struct stat stat_buf;
+  if (fstat(fd, &stat_buf) == -1) {
+    return FAILURE;
+  }
+  if (stat_buf.st_size == 0) {
+    init_header_page();
+  }
+
   return global_table_id; // 추후에 table_id는 구현할 기능
 }
 
@@ -25,8 +35,11 @@ int open_table(char *pathname) {
  * Otherwise, return non-zero value
  */
 int db_insert(int64_t key, char *value) {
-  int result = insert(2, key, value);
-  return result > 0 ? 0 : result;
+  int result = insert(key, value);
+  if (result == SUCCESS) {
+    return SUCCESS;
+  }
+  return result;
 }
 
 /**
@@ -36,10 +49,10 @@ int db_insert(int64_t key, char *value) {
  * Memory allocation for ret_val should occur in caller
  */
 int db_find(int64_t key, char *ret_val) {
-  if (find(2, key, ret_val)) {
-    return 0;
+  if (find(key, ret_val) == SUCCESS) {
+    return SUCCESS;
   }
-  return -1;
+  return FAILURE;
 }
 
 /**
@@ -47,6 +60,9 @@ int db_find(int64_t key, char *ret_val) {
  * If success, return 0. Otherwise, return non-zero value
  */
 int db_delete(int64_t key) {
-  int result = delete (2, key);
-  return result > 0 ? 0 : -1;
+  int result = delete (key);
+  if (result) {
+    return SUCCESS;
+  }
+  return FAILURE;
 }

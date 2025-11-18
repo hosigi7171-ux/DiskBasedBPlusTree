@@ -26,8 +26,8 @@
 
 #define LEAF_ORDER RECORD_CNT + 1
 #define INTERNAL_ORDER ENTRY_CNT + 1
-#define SUCCESS 1
-#define FAILURE 0
+#define SUCCESS 0
+#define FAILURE 1
 #define CANNOT_ROOT -2
 #define MAX_RANGE_SIZE 500 // for finding range
 #define MIN_KEYS 1         // for delayed merge
@@ -89,14 +89,12 @@ queue *dequeue(void);
 int height(pagenum_t header_page_num);
 void print_leaves(void);
 void print_tree();
-void find_and_print(pagenum_t root_num, int64_t key);
-void find_and_print_range(pagenum_t root_num, int64_t key_start,
-                          int64_t key_end);
-int find_range(pagenum_t root_num, int64_t key_start, int64_t key_end,
-               int64_t returned_keys[], pagenum_t returned_pages[],
-               int returned_indices[]);
-pagenum_t find_leaf(pagenum_t root, int64_t key);
-char *find(pagenum_t root, int64_t key, char *result_buf);
+void find_and_print(int64_t key);
+void find_and_print_range(int64_t key_start, int64_t key_end);
+int find_range(int64_t key_start, int64_t key_end, int64_t returned_keys[],
+               pagenum_t returned_pages[], int returned_indices[]);
+pagenum_t find_leaf(int64_t key);
+int find(int64_t key, char *result_buf);
 int cut(int length);
 
 // Insertion.
@@ -105,22 +103,19 @@ record_t *make_record(char *value);
 pagenum_t make_node(uint32_t isleaf);
 pagenum_t make_leaf(void);
 int get_index_after_left_child(page_t *parent_buffer, pagenum_t left_num);
-pagenum_t insert_into_leaf(pagenum_t leaf_num, page_t *leaf_buffer, int64_t key,
-                           char *value);
-pagenum_t insert_into_leaf_after_splitting(pagenum_t root, pagenum_t leaf,
-                                           int64_t key, char *value);
-pagenum_t insert_into_node(pagenum_t root, pagenum_t parent, int64_t left_index,
-                           int64_t key, pagenum_t right);
-pagenum_t insert_into_node_after_splitting(pagenum_t root, pagenum_t parent,
-                                           int64_t left_index, int64_t key,
-                                           pagenum_t right);
-pagenum_t insert_into_parent(pagenum_t root, pagenum_t left, int64_t key,
-                             pagenum_t right);
-pagenum_t insert_into_new_root(pagenum_t left, int64_t key, pagenum_t right);
-pagenum_t start_new_tree(int64_t key, char *value);
+int insert_into_leaf(pagenum_t leaf_num, page_t *leaf_buffer, int64_t key,
+                     char *value);
+int insert_into_leaf_after_splitting(pagenum_t leaf, int64_t key, char *value);
+int insert_into_node(pagenum_t parent, int64_t left_index, int64_t key,
+                     pagenum_t right);
+int insert_into_node_after_splitting(pagenum_t parent, int64_t left_index,
+                                     int64_t key, pagenum_t right);
+int insert_into_parent(pagenum_t left, int64_t key, pagenum_t right);
+int insert_into_new_root(pagenum_t left, int64_t key, pagenum_t right);
+int start_new_tree(int64_t key, char *value);
 void init_header_page();
 void link_header_page(pagenum_t root);
-pagenum_t insert(pagenum_t root, int64_t key, char *value);
+int insert(int64_t key, char *value);
 
 // Deletion.
 
@@ -128,15 +123,13 @@ int get_kprime_index(pagenum_t target_node);
 int remove_record_from_node(leaf_page_t *target_page, int64_t key, char *value);
 int remove_entry_from_node(internal_page_t *target_page, int64_t key);
 pagenum_t adjust_root(pagenum_t root);
-pagenum_t coalesce_nodes(pagenum_t root, pagenum_t target_num,
-                         pagenum_t neighbor_num, int kprime_index_from_get,
-                         int64_t k_prime);
-pagenum_t redistribute_nodes(pagenum_t root, pagenum_t target_num,
-                             pagenum_t neighbor_num, int kprime_index_from_get,
-                             int k_prime_index, int k_prime);
-pagenum_t delete_entry(pagenum_t root, pagenum_t target_node, int64_t key,
-                       char *value);
-pagenum_t delete (pagenum_t root, int64_t key);
+int coalesce_nodes(pagenum_t target_num, pagenum_t neighbor_num,
+                   int kprime_index_from_get, int64_t k_prime);
+int redistribute_nodes(pagenum_t target_num, pagenum_t neighbor_num,
+                       int kprime_index_from_get, int k_prime_index,
+                       int k_prime);
+int delete_entry(pagenum_t target_node, int64_t key, char *value);
+int delete (int64_t key);
 
 void destroy_tree_nodes(pagenum_t root);
 void destroy_tree(void);
