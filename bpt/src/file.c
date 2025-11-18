@@ -36,21 +36,21 @@ pagenum_t file_alloc_page() {
   pagenum_t allocated_page_num;
   pagenum_t *current_head_ptr;
 
-  file_read_page(0, &header);
+  file_read_page(HEADER_PAGE_POS, &header);
   current_head_ptr = &header.free_page_num;
   allocated_page_num = *current_head_ptr;
 
   if (allocated_page_num == 0) {
     pagenum_t new_page_num = header.num_of_pages;
     header.num_of_pages += 1;
-    file_write_page(0, &header);
+    file_write_page(HEADER_PAGE_POS, &header);
 
     return new_page_num;
   }
 
   file_read_page(allocated_page_num, &free_page);
   *current_head_ptr = free_page.next_free_page_num;
-  file_write_page(0, &header);
+  file_write_page(HEADER_PAGE_POS, &header);
 
   return allocated_page_num;
 }
@@ -65,17 +65,17 @@ pagenum_t my_file_alloc_page(uint32_t page_type) {
   pagenum_t allocated_page_num;
   pagenum_t *current_head_ptr;
 
-  file_read_page(0, (page_t *)&header);
+  file_read_page(HEADER_PAGE_POS, (page_t *)&header);
 
   pagenum_t *free_list_head = get_free_list_head(&header, page_type);
   allocated_page_num = pop_free_page(free_list_head);
 
   // if there is no free list
-  if (allocated_page_num == 0) {
+  if (allocated_page_num == PAGE_NULL) {
     allocated_page_num = allocate_new_page(&header, page_type);
   }
 
-  file_write_page(0, (page_t *)&header);
+  file_write_page(HEADER_PAGE_POS, (page_t *)&header);
   return allocated_page_num;
 }
 
@@ -117,8 +117,9 @@ pagenum_t allocate_new_page(header_page_t *header, uint32_t page_type) {
  * @brief pop free page from free list
  */
 pagenum_t pop_free_page(pagenum_t *free_list_head) {
-  if (*free_list_head == 0)
+  if (*free_list_head == 0) {
     return 0;
+  }
 
   pagenum_t allocated_page_num = *free_list_head;
   free_page_t free_page;
@@ -140,14 +141,14 @@ void file_free_page(pagenum_t pagenum) {
   free_page_t new_free_page;
 
   // 헤더 페이지를 읽어와서 프리 페이지 리스트 참조
-  file_read_page(0, &header);
+  file_read_page(HEADER_PAGE_POS, &header);
   file_read_page(pagenum, &removing_page);
   uint32_t isleaf = get_isleaf_flag(&removing_page);
   link_new_free_page(&header, pagenum, isleaf, &new_free_page);
 
   // 삭제할 자리에 새로 작성할 프리 페이지 작성
   file_write_page(pagenum, (page_t *)&new_free_page);
-  file_write_page(0, (page_t *)&header);
+  file_write_page(HEADER_PAGE_POS, (page_t *)&header);
 }
 
 /**
