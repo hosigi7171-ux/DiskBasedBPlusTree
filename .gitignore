@@ -1,6 +1,15 @@
 # Object files
 *.o
 
+# Dependecy files for testing
+*.d
+*.build
+bpt/build/vendor/*
+bpt/build/test/mocks/*
+bpt/build/test/runners/*
+*.out
+*.fail
+
 # Libraries
 lib/*.a
 
