@@ -23,9 +23,12 @@
 // order arbitrarily.  You may change the maximum order.
 #define MIN_ORDER 3
 #define MAX_ORDER 20
-
+#ifndef LEAF_ORDER
 #define LEAF_ORDER RECORD_CNT + 1
+#endif
+#ifndef INTERNAL_ORDER
 #define INTERNAL_ORDER ENTRY_CNT + 1
+#endif
 #define SUCCESS 0
 #define FAILURE 1
 #define CANNOT_ROOT -2
@@ -96,7 +99,7 @@ int find_range(int64_t key_start, int64_t key_end, int64_t returned_keys[],
 pagenum_t find_leaf(int64_t key);
 int find(int64_t key, char *result_buf);
 int cut(int length);
-
+void copy_value(char *dest, const char *src, size_t size);
 // Insertion.
 
 record_t *make_record(char *value);

@@ -122,10 +122,16 @@
 #  - Specifiying symbols used during test preprocessing
 :defines:
   :test:
-    :*: # 모든 테스트에 적용
+    :test_deletion:
       - RECORD_CNT=3
       - ENTRY_CNT=4
       - MIN_KEYS=1
+    :test_insertion:
+      - RECORD_CNT=2
+      - ENTRY_CNT=16
+      - NON_HEADER_PAGE_RESERVED=3816
+      - LEAF_ORDER=3
+      - INTERNAL_ORDER=17
   :release: []
   # Enable to inject name of a test as a unique compilation symbol into its respective executable build.
   :use_test_definition: FALSE
