@@ -372,16 +372,16 @@ void print_tree() {
  * appropriate message to stdout.
  */
 void find_and_print(int64_t key) {
-  page_t leaf_buf;
-  int index_found = -1;
-
   char result_buf[VALUE_SIZE];
-  char *ret_val = find(key, result_buf);
-  if (ret_val != NULL) {
-    printf("Record -- key" PRId64 ", value %s.\n", key, ret_val);
-    return;
+
+  int result = find(key, result_buf);
+
+  if (result == SUCCESS) {
+    printf("Record -- key %" PRId64 ", value %s.\n", key, result_buf);
+  } else {
+    // 실패 시
+    printf("Record not found key %" PRId64 "\n", key);
   }
-  printf("Record not found key " PRId64 "\n", key);
 }
 
 /* Finds and prints the keys, pointers, and values within a range
@@ -409,10 +409,12 @@ void find_and_print_range(int64_t key_start, int64_t key_end) {
 
       int64_t key = returned_keys[i];
       int index = returned_indices[i];
-      int value = temp_leaf->records[index].value;
 
-      printf("Key: %" PRId64 "  Location: page %d, index %d  Value: %d\n", key,
-             returned_pages[i], index, value);
+      char *value_ptr = temp_leaf->records[index].value;
+
+      printf("Key: %" PRId64 "  Location: page %" PRId64
+             ", index %d  Value: %s\n",
+             key, returned_pages[i], index, value_ptr);
     }
   }
 }
@@ -425,9 +427,10 @@ void find_and_print_range(int64_t key_start, int64_t key_end) {
 int find_range(int64_t key_start, int64_t key_end, int64_t returned_keys[],
                pagenum_t returned_pages[], int returned_indices[]) {
 
-  int i;
+  int i = 0;
   int num_found = 0;
   page_t leaf_buf;
+  leaf_page_t *leaf_page;
 
   pagenum_t current_leaf_num = find_leaf(key_start);
 
@@ -436,23 +439,16 @@ int find_range(int64_t key_start, int64_t key_end, int64_t returned_keys[],
   }
 
   file_read_page(current_leaf_num, &leaf_buf);
-  leaf_page_t *leaf_page = (leaf_page_t *)&leaf_buf;
-  page_header_t *leaf_header = (page_header_t *)&leaf_buf;
+  leaf_page = (leaf_page_t *)&leaf_buf;
 
-  // find start pos
-  for (i = 0; i < leaf_header->num_of_keys; i++) {
+  for (i = 0; i < leaf_page->num_of_keys; i++) {
     if (leaf_page->records[i].key >= key_start) {
       break;
     }
   }
-  // not found
-  if (i == leaf_header->num_of_keys) {
-    return 0;
-  }
 
-  // count number of leaf
   while (current_leaf_num != PAGE_NULL) {
-    for (; i < leaf_header->num_of_keys; i++) {
+    for (; i < leaf_page->num_of_keys; i++) {
       int64_t current_key = leaf_page->records[i].key;
 
       if (current_key > key_end) {
@@ -471,7 +467,6 @@ int find_range(int64_t key_start, int64_t key_end, int64_t returned_keys[],
     if (current_leaf_num != PAGE_NULL) {
       file_read_page(current_leaf_num, &leaf_buf);
       leaf_page = (leaf_page_t *)&leaf_buf;
-      leaf_header = (page_header_t *)&leaf_buf;
     }
   }
 
@@ -482,6 +477,8 @@ int find_range(int64_t key_start, int64_t key_end, int64_t returned_keys[],
  * by key.  Displays information about the path
  * if the verbose flag is set.
  * Returns the leaf containing the given key.
+ * This function finds the location where the key
+ * should be, regardless of whether the key exists.
  */
 pagenum_t find_leaf(int64_t key) {
   page_t header_buf;
@@ -498,6 +495,7 @@ pagenum_t find_leaf(int64_t key) {
     uint32_t is_leaf = page_header->is_leaf;
 
     if (is_leaf == LEAF) {
+      printf(PRId64 " " PRId64 "\n", key, header_page->root_page_num);
       return cur_num;
     }
 
@@ -526,7 +524,7 @@ pagenum_t find_leaf(int64_t key) {
 int find(int64_t key, char *result_buf) {
   pagenum_t leaf_num = find_leaf(key);
   if (leaf_num == PAGE_NULL) {
-    return PAGE_NULL;
+    return FAILURE;
   }
 
   // leaf_page 에서 키에 해당하는 값 찾기
@@ -567,21 +565,6 @@ void copy_value(char *dest, const char *src, size_t size) {
   dest[size - 1] = '\0';
 }
 
-/* Creates a new record to hold the value
- * to which a key refers.
- */
-// record_t *make_record(int64_t key, char *value) {
-//   record_t *new_record = (record_t *)malloc(sizeof(record_t));
-//   if (new_record == NULL) {
-//     perror("Record creation.");
-//     exit(EXIT_FAILURE);
-//   } else {
-//     new_record->key = key;
-//     copy_value(new_record, value, VALUE_SIZE);
-//   }
-//   return new_record;
-// }
-
 void init_leaf_page(page_t *page) {
   leaf_page_t *leaf_page = (leaf_page_t *)page;
   leaf_page->parent_page_num = PAGE_NULL;
@@ -603,7 +586,7 @@ void init_internal_page(page_t *page) {
  */
 pagenum_t make_node(uint32_t isleaf) {
   pagenum_t new_page_num;
-  new_page_num = my_file_alloc_page(isleaf);
+  new_page_num = file_alloc_page();
   if (new_page_num == PAGE_NULL) {
     perror("Node creation.");
     exit(EXIT_FAILURE);
@@ -695,7 +678,7 @@ int insert_into_leaf_after_splitting(pagenum_t leaf_num, int64_t key,
 
   new_leaf_num = make_leaf();
 
-  temp_records = (record_t *)malloc(LEAF_ORDER * sizeof(record_t));
+  temp_records = (record_t *)malloc(RECORD_CNT * sizeof(record_t));
   if (temp_records == NULL) {
     perror("Temporary records array.");
     exit(EXIT_FAILURE);
@@ -724,7 +707,7 @@ int insert_into_leaf_after_splitting(pagenum_t leaf_num, int64_t key,
   copy_value(temp_records[insertion_index].value, value, VALUE_SIZE);
 
   // 분할 지점 계산
-  split = cut(LEAF_ORDER);
+  split = cut(RECORD_CNT);
 
   // 분할 지점까지 old_leaf_page에 할당
   leaf_page->num_of_keys = 0;
@@ -814,7 +797,7 @@ int insert_into_node_after_splitting(pagenum_t old_node, int64_t left_index,
   internal_page_t *old_node_page = (internal_page_t *)&tmp_old_page;
 
   // temporary entry 할당
-  temp_entries = (entry_t *)malloc((INTERNAL_ORDER) * sizeof(entry_t));
+  temp_entries = (entry_t *)malloc((ENTRY_CNT) * sizeof(entry_t));
   if (temp_entries == NULL) {
     perror("Temporary entries array.");
     exit(EXIT_FAILURE);
@@ -873,18 +856,22 @@ int insert_into_node_after_splitting(pagenum_t old_node, int64_t left_index,
   new_node_page->parent_page_num = old_node_page->parent_page_num;
   child = new_node_page->one_more_page_num;
   page_t tmp_child_page;
-  file_read_page(child, &tmp_child_page);
-  page_header_t *child_page_header = (page_header_t *)&tmp_child_page;
-  child_page_header->parent_page_num = new_node;
-  file_write_page(child, (page_t *)child_page_header);
+  if (child != PAGE_NULL) {
+    file_read_page(child, &tmp_child_page);
+    page_header_t *child_page_header = (page_header_t *)&tmp_child_page;
+    child_page_header->parent_page_num = new_node;
+    file_write_page(child, (page_t *)child_page_header);
+  }
 
   // New node의 엔트리 자식 업데이트
   for (i = 0; i < new_node_page->num_of_keys; i++) {
     child = new_node_page->entries[i].page_num;
-    file_read_page(child, &tmp_child_page);
-    child_page_header = (page_header_t *)&tmp_child_page;
-    child_page_header->parent_page_num = new_node;
-    file_write_page(child, (page_t *)child_page_header);
+    if (child != PAGE_NULL) {
+      file_read_page(child, &tmp_child_page);
+      page_header_t *child_page_header = (page_header_t *)&tmp_child_page;
+      child_page_header->parent_page_num = new_node;
+      file_write_page(child, (page_t *)child_page_header);
+    }
   }
 
   /* Insert a new key into the parent of the two
@@ -933,7 +920,7 @@ int insert_into_parent(pagenum_t left, int64_t key, pagenum_t right) {
   /* Simple case: the new key fits into the node.
    */
 
-  if (parent_page_header->num_of_keys < ENTRY_CNT) {
+  if (parent_page_header->num_of_keys < INTERNAL_ORDER - 1) {
     return insert_into_node(parent, left_index, key, right);
   }
 
@@ -1018,9 +1005,7 @@ void init_header_page() {
   page_t header_buf;
   memset(&header_buf, 0, PAGE_SIZE);
   header_page_t *header_page = (header_page_t *)&header_buf;
-  header_page->magic_num = MAGIC_NUM;
-  header_page->internal_next_alloc = HEADER_PAGE_POS + 1;
-  header_page->num_of_pages = INITIAL_INTERNAL_CAPACITY;
+  header_page->num_of_pages = HEADER_PAGE_POS + 1;
 
   file_write_page(HEADER_PAGE_POS, (header_page_t *)header_page);
 }
@@ -1048,15 +1033,9 @@ int insert(int64_t key, char *value) {
    */
 
   char result_buf[VALUE_SIZE];
-  if (find(key, result_buf) != SUCCESS) {
+  if (find(key, result_buf) == SUCCESS) {
     return FAILURE;
   }
-
-  /* Create a new record for the
-   * value.
-   */
-
-  // pointer = make_record(value);
 
   /* Case: the tree does not exist yet.
    * Start a new tree.
@@ -1615,10 +1594,15 @@ int delete (int64_t key) {
   pagenum_t leaf;
 
   char value_buf[VALUE_SIZE];
-  char *value_result = find(key, value_buf);
+  // if not exists fail
+  if (find(key, value_buf) != SUCCESS) {
+    return FAILURE;
+  }
+
   leaf = find_leaf(key);
-  if (value_result != NULL && leaf != PAGE_NULL) {
-    return delete_entry(leaf, key, value_result);
+
+  if (leaf != PAGE_NULL) {
+    return delete_entry(leaf, key, value_buf);
   }
   return FAILURE;
 }
