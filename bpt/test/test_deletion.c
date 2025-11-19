@@ -20,7 +20,11 @@
 #define LEAF 1
 #define INTERNAL 0
 
-void setUp(void) { setup_data_store(); }
+void setUp(void) {
+  setup_data_store();
+  file_read_page_Stub(MOCK_file_read_page);
+  file_write_page_Stub(MOCK_file_write_page);
+}
 void tearDown(void) {}
 
 /**
@@ -43,8 +47,6 @@ void test_delete_root_becomes_empty(void) {
   strcpy(l1->records[0].value, DELETE_VALUE);
 
   // Mock Setup
-  file_read_page_Stub(MOCK_file_read_page);
-  file_write_page_Stub(MOCK_file_write_page);
 
   // P2는 루트이며 키 0개가 되므로 해제되어야 함
   file_free_page_Expect(ROOT_NUM);
@@ -100,10 +102,6 @@ void test_delete_leaf_redistribution_R_to_L(void) {
   l4->records[0].key = 4;
   strcpy(l4->records[0].value, DELETE_VALUE);
   l4->right_sibling_page_num = PAGE_NULL;
-
-  // Mock Setup
-  file_read_page_Stub(MOCK_file_read_page);
-  file_write_page_Stub(MOCK_file_write_page);
 
   delete_entry(P4, 4, DELETE_VALUE);
 
@@ -168,10 +166,6 @@ void test_delete_leaf_coalesce_swap_R_to_L(void) {
   l4->records[1].key = 7;
   strcpy(l4->records[1].value, "val7");
   l4->right_sibling_page_num = P5;
-
-  // Mock Setup
-  file_read_page_Stub(MOCK_file_read_page);
-  file_write_page_Stub(MOCK_file_write_page);
 
   // EXPECTATION: P4가 병합으로 해제되고, P2(Root)가 붕괴하여 해제됨.
   file_free_page_Expect(P4);
@@ -249,10 +243,6 @@ void test_delete_internal_coalesce(void) {
   page_header_t *l7 = (page_header_t *)&MOCK_PAGES[L7];
   l7->parent_page_num = P4;
 
-  // Mock Setup
-  file_read_page_Stub(MOCK_file_read_page);
-  file_write_page_Stub(MOCK_file_write_page);
-
   // Expected Call Order:
   file_free_page_Expect(P4);
   file_free_page_Expect(ROOT_NUM);
@@ -325,10 +315,6 @@ void test_delete_leaf_redistribute_when_target_is_empty(void) {
   l4->records[0].key = 50;
   strcpy(l4->records[0].value, DELETE_VALUE);
   l4->right_sibling_page_num = PAGE_NULL;
-
-  // Mock Setup
-  file_read_page_Stub(MOCK_file_read_page);
-  file_write_page_Stub(MOCK_file_write_page);
 
   // EXPECTATION: No pages should be freed (Redistribution).
   // file_free_page_Expect(...) 없음
