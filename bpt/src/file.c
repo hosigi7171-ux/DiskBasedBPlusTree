@@ -51,8 +51,6 @@ void file_free_page(pagenum_t pagenum) {
 
   // 헤더 페이지를 읽어와서 프리 페이지 리스트 참조
   file_read_page(HEADER_PAGE_POS, &header);
-  file_read_page(pagenum, &removing_page);
-  uint32_t isleaf = get_isleaf_flag(&removing_page);
   new_free_page.next_free_page_num = header.free_page_num;
   header.free_page_num = pagenum;
 
@@ -71,8 +69,7 @@ void file_read_page(pagenum_t pagenum, page_t *dest) {
     handle_error("lseek error");
   }
 
-  ssize_t bytes_read = read(fd, dest, PAGE_SIZE);
-  if (bytes_read != PAGE_SIZE) {
+  if (read(fd, dest, PAGE_SIZE) != PAGE_SIZE) {
     handle_error("read error");
   }
 }
@@ -87,8 +84,7 @@ void file_write_page(pagenum_t pagenum, const page_t *src) {
     handle_error("lseek error");
   }
 
-  ssize_t bytes_written = write(fd, src, PAGE_SIZE);
-  if (bytes_written != PAGE_SIZE) {
+  if (write(fd, src, PAGE_SIZE) != PAGE_SIZE) {
     handle_error("write error");
   }
 
