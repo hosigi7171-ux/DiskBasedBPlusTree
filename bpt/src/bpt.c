@@ -495,7 +495,6 @@ pagenum_t find_leaf(int64_t key) {
     uint32_t is_leaf = page_header->is_leaf;
 
     if (is_leaf == LEAF) {
-      printf(PRId64 " " PRId64 "\n", key, header_page->root_page_num);
       return cur_num;
     }
 
