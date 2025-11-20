@@ -1,111 +1,131 @@
-#include "bpt.h"
+#include "db_api.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-// MAIN
+extern int global_table_id;
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
+  char db_pathname[VALUE_SIZE] = "sample.db";
 
-    char *input_file;
-    FILE *fp;
-    node *root;
-    int input, range2;
-    char instruction;
-    char license_part;
+  int64_t input_key;
+  char input_value[VALUE_SIZE];
+  int64_t range;
+  char instruction;
 
-    root = NULL;
-    verbose_output = false;
+  license_notice();
+  usage();
 
-    if (argc > 1)
-    {
-        order = atoi(argv[1]);
-        if (order < MIN_ORDER || order > MAX_ORDER)
-        {
-            fprintf(stderr, "Invalid order: %d .\n\n", order);
-            usage_3();
-            exit(EXIT_FAILURE);
-        }
+  printf("> ");
+  while (scanf("%c", &instruction) != EOF) {
+
+    if (instruction == '\n' || instruction == ' ') {
+      continue;
     }
 
-    license_notice();
-    usage_1();
-    usage_2();
+    switch (instruction) {
+    case 'o':
+      if (scanf("%s", db_pathname) == 1) {
+        if (global_table_id >= 0) {
+          close_table();
+        }
 
-    if (argc > 2)
-    {
-        input_file = argv[2];
-        fp = fopen(input_file, "r");
-        if (fp == NULL)
-        {
-            perror("Failure  open input file.");
-            exit(EXIT_FAILURE);
+        global_table_id = open_table(db_pathname);
+        if (global_table_id == FAILURE) {
+          perror("Failure to open database file");
+          global_table_id = -1;
+        } else {
+          printf("Successfully open\n");
         }
-        while (!feof(fp))
-        {
-            fscanf(fp, "%d\n", &input);
-            root = insert(root, input, input);
+      } else {
+        printf("Missing pathname 'o'\n");
+      }
+      break;
+
+    case 'i': // Insert
+    case 'd': // Delete
+    case 'f': // Find
+    case 'r': // Range Search
+    case 't': // Print Tree
+
+      if (global_table_id < 0) {
+        printf("Table not open Use 'o <pathname>' first\n");
+      } else {
+        switch (instruction) {
+        case 'i':
+          scanf("%" PRId64, &input_key);
+          snprintf(input_value, VALUE_SIZE, "%" PRId64 "_value", input_key);
+
+          if (db_insert(input_key, input_value) == SUCCESS) {
+            printf("Key %" PRId64 " inserted successfully with value: %s\n",
+                   input_key, input_value);
+          } else {
+            printf("Insertion failed for key %" PRId64 ".\n", input_key);
+          }
+          break;
+
+        case 'd':
+          scanf("%" PRId64, &input_key);
+          if (db_delete(input_key) == SUCCESS) {
+            printf("Key %" PRId64 " deletion success\n", input_key);
+          } else {
+            printf("Key %" PRId64 " deletion fail\n", input_key);
+          }
+          break;
+
+        case 'f':
+          scanf("%" PRId64, &input_key);
+          char ret_val[VALUE_SIZE];
+          if (db_find(input_key, ret_val) == SUCCESS) {
+            printf("Key %" PRId64 " found. Value: %s\n", input_key, ret_val);
+          } else {
+            printf("Key %" PRId64 " not found.\n", input_key);
+          }
+          break;
+
+        case 'r':
+          scanf("%" PRId64 " %" PRId64, &input_key, &range);
+          if (input_key > range) {
+            int64_t tmp = range;
+            range = input_key;
+            input_key = tmp;
+          }
+          db_find_and_print_range(input_key, range);
+          break;
+
+        case 't':
+          db_print_tree();
+          break;
         }
-        fclose(fp);
-        print_tree(root);
+      }
+      break;
+
+    case 'q':
+      while (getchar() != '\n')
+        ;
+      if (global_table_id >= 0) {
+        close_table();
+      }
+      printf("Exiting program.\n");
+      return EXIT_SUCCESS;
+      break;
+
+    case '?':
+      usage();
+      break;
+
+    default:
+      printf("Unknown command '%c'. Supported: o, i, d, f, r, t, q\n",
+             instruction);
+      break;
     }
+
+    while (getchar() != (int)'\n')
+      ;
 
     printf("> ");
-    while (scanf("%c", &instruction) != EOF)
-    {
-        switch (instruction)
-        {
-        case 'd':
-            scanf("%d", &input);
-            root = delete(root, input);
-            print_tree(root);
-            break;
-        case 'i':
-            scanf("%d", &input);
-            root = insert(root, input, input);
-            print_tree(root);
-            break;
-        case 'f':
-        case 'p':
-            scanf("%d", &input);
-            find_and_print(root, input, instruction == 'p');
-            break;
-        case 'r':
-            scanf("%d %d", &input, &range2);
-            if (input > range2)
-            {
-                int tmp = range2;
-                range2 = input;
-                input = tmp;
-            }
-            find_and_print_range(root, input, range2, instruction == 'p');
-            break;
-        case 'l':
-            print_leaves(root);
-            break;
-        case 'q':
-            while (getchar() != (int)'\n')
-                ;
-            return EXIT_SUCCESS;
-            break;
-        case 't':
-            print_tree(root);
-            break;
-        case 'v':
-            verbose_output = !verbose_output;
-            break;
-        case 'x':
-            if (root)
-                root = destroy_tree(root);
-            print_tree(root);
-            break;
-        default:
-            usage_2();
-            break;
-        }
-        while (getchar() != (int)'\n')
-            ;
-        printf("> ");
-    }
-    printf("\n");
+  }
+  printf("\n");
 
-    return EXIT_SUCCESS;
+  return EXIT_SUCCESS;
 }
