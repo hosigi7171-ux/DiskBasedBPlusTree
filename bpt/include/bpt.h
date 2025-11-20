@@ -16,13 +16,8 @@
 #define true 1
 #endif
 
-// Default order is 4.
-#define DEFAULT_ORDER 4
-
 // Minimum order is necessarily 3.  We set the maximum
 // order arbitrarily.  You may change the maximum order.
-#define MIN_ORDER 3
-#define MAX_ORDER 20
 #ifndef LEAF_ORDER
 #define LEAF_ORDER RECORD_CNT + 1
 #endif
@@ -30,7 +25,7 @@
 #define INTERNAL_ORDER ENTRY_CNT + 1
 #endif
 #define SUCCESS 0
-#define FAILURE 1
+#define FAILURE -1
 #define CANNOT_ROOT -2
 #define MAX_RANGE_SIZE 500 // for finding range
 #define MIN_KEYS 1         // for delayed merge
@@ -48,18 +43,6 @@
 
 // GLOBALS.
 
-/* The order determines the maximum and minimum
- * number of entries (keys and pointers) in any
- * node.  Every node has at most order - 1 keys and
- * at least (roughly speaking) half that number.
- * Every leaf has as many pointers to data as keys,
- * and every internal node has one more pointer
- * to a subtree than the number of keys.
- * This global variable is initialized to the
- * default value.
- */
-extern int order;
-
 /* The queue is used to print the tree in
  * level order, starting from the root
  * printing each entire rank on a separate
@@ -71,22 +54,13 @@ typedef struct queue {
   struct queue *next;
 } queue;
 
-/* The user can toggle on and off the "verbose"
- * property, which causes the pointer addresses
- * to be printed out in hexadecimal notation
- * next to their corresponding keys.
- */
-extern bool verbose_output;
-
 // FUNCTION PROTOTYPES.
 
 // Output and utility.
 
 void license_notice(void);
 void print_license(int licence_part);
-void usage_1(void);
-void usage_2(void);
-void usage_3(void);
+void usage(void);
 void enqueue(pagenum_t new_page_num, int level);
 queue *dequeue(void);
 int height(pagenum_t header_page_num);

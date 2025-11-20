@@ -55,33 +55,12 @@
 #include "bpt.h"
 // GLOBALS.
 
-/* The order determines the maximum and minimum
- * number of entries (keys and pointers) in any
- * node.  Every node has at most order - 1 keys and
- * at least (roughly speaking) half that number.
- * Every leaf has as many pointers to data as keys,
- * and every internal node has one more pointer
- * to a subtree than the number of keys.
- * This global variable is initialized to the
- * default value.
- */
-int order = DEFAULT_ORDER;
-
 /* The queue is used to print the tree in
  * level order, starting from the root
  * printing each entire rank on a separate
  * line, finishing with the leaves.
  */
 queue *q_head;
-
-/* The user can toggle on and off the "verbose"
- * property, which causes the pointer addresses
- * to be printed out in hexadecimal notation
- * next to their corresponding keys.
- */
-bool verbose_output = false;
-
-// FUNCTION DEFINITIONS.
 
 // OUTPUT AND UTILITIES
 
@@ -131,48 +110,19 @@ void print_license(int license_part) {
   fclose(fp);
 }
 
-/* First message to the user.
- */
-void usage_1(void) {
-  printf("B+ Tree of Order %d.\n", order);
-  printf("Following Silberschatz, Korth, Sidarshan, Database Concepts, "
-         "5th ed.\n\n"
-         "To build a B+ tree of a different order, start again and enter "
-         "the order\n"
-         "as an integer argument:  bpt <order>  ");
-  printf("(%d <= order <= %d).\n", MIN_ORDER, MAX_ORDER);
-  printf("To start with input from a file of newline-delimited integers, \n"
-         "start again and enter the order followed by the filename:\n"
-         "bpt <order> <inputfile> .\n");
-}
-
-/* Second message to the user.
- */
-void usage_2(void) {
-  printf(
-      "Enter any of the following commands after the prompt > :\n"
-      "\ti <k>  -- Insert <k> (an integer) as both key and value).\n"
-      "\tf <k>  -- Find the value under key <k>.\n"
-      "\tp <k> -- Print the path from the root to key k and its associated "
-      "value.\n"
-      "\tr <k1> <k2> -- Print the keys and values found in the range "
-      "[<k1>, <k2>\n"
-      "\td <k>  -- Delete key <k> and its associated value.\n"
-      "\tx -- Destroy the whole tree.  Start again with an empty tree of the "
-      "same order.\n"
-      "\tt -- Print the B+ tree.\n"
-      "\tl -- Print the keys of the leaves (bottom row of the tree).\n"
-      "\tv -- Toggle output of pointer addresses (\"verbose\") in tree and "
-      "leaves.\n"
-      "\tq -- Quit. (Or use Ctl-D.)\n"
-      "\t? -- Print this help message.\n");
-}
-
-/* Brief usage note.
- */
-void usage_3(void) {
-  printf("Usage: ./bpt [<order>]\n");
-  printf("\twhere %d <= order <= %d .\n", MIN_ORDER, MAX_ORDER);
+void usage(void) {
+  printf("Simple DBMS (B+ Tree based) - Commands:\n\n");
+  printf("  o <filename>   Open (or create) a database file\n");
+  printf("  i <key>        Insert key (value is automatically generated as "
+         "\"<key>_value\")\n");
+  printf("  f <key>        Find and print the value for <key>\n");
+  printf("  d <key>        Delete <key> and its value\n");
+  printf("  r <k1> <k2>    Print all keys and values in range [min(k1,k2) ... "
+         "max(k1,k2)]\n");
+  printf("  t              Print the entire B+ tree structure\n");
+  printf("  q              Quit the program (closes the current table)\n");
+  printf("  ?              Show this help message\n\n");
+  printf("> ");
 }
 
 /* Helper function for printing the
