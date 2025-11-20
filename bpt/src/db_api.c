@@ -2,7 +2,6 @@
 #include "bpt.h"
 
 extern int fd;
-const char DB_NAME[] = "test.db";
 int global_table_id = -1;
 
 /**
@@ -13,7 +12,7 @@ int global_table_id = -1;
  */
 int open_table(char *pathname) {
   mode_t mode = 0600; // only owner rw
-  if ((fd = open(DB_NAME, O_RDWR | O_CREAT, mode)) == -1) {
+  if ((fd = open(pathname, O_RDWR | O_CREAT, mode)) == -1) {
     return FAILURE;
   }
 
@@ -26,6 +25,7 @@ int open_table(char *pathname) {
     init_header_page();
   }
 
+  global_table_id = 0;
   return global_table_id; // 추후에 table_id는 구현할 기능
 }
 
@@ -65,4 +65,51 @@ int db_delete(int64_t key) {
     return SUCCESS;
   }
   return FAILURE;
+}
+
+/**
+ * NOT NECESSARY-------------------
+ */
+
+void db_print_tree(void) {
+  if (global_table_id < 0) {
+    printf("table not open\n");
+    return;
+  }
+  print_tree();
+}
+
+void db_print_leaves(void) {
+  if (global_table_id < 0) {
+    printf("table not open\n");
+    return;
+  }
+  print_leaves();
+}
+
+void db_find_and_print_range(int64_t key_start, int64_t key_end) {
+  if (global_table_id < 0) {
+    printf("table not open\n");
+    return;
+  }
+  find_and_print_range(key_start, key_end);
+}
+
+int close_table(void) {
+  if (global_table_id < 0) {
+    printf("tabe not open\n");
+    return SUCCESS;
+  }
+
+  int result = SUCCESS;
+
+  if (close(fd) == -1) {
+    perror("cannot close fd");
+    result = FAILURE;
+  }
+
+  global_table_id = -1;
+
+  printf("table closed\n");
+  return result;
 }
