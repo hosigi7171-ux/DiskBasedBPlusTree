@@ -10,6 +10,7 @@ bpt/build/test/runners/*
 *.out
 *.fail
 *.pass
+file_test
 
 # Libraries
 lib/*.a
