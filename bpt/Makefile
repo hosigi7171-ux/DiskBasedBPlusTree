@@ -14,7 +14,7 @@ TARGET_SRC:=$(SRCDIR)main.c
 TARGET_OBJ:=$(SRCDIR)main.o
 
 # Include more files if you write another source file.
-SRCS_FOR_LIB:=$(SRCDIR)bpt.c
+SRCS_FOR_LIB:=$(SRCDIR)bpt.c $(SRCDIR)db_api.c $(SRCDIR)file.c
 OBJS_FOR_LIB:=$(SRCS_FOR_LIB:.c=.o)
 
 CFLAGS+= -g -fPIC -I $(INC)
@@ -23,8 +23,12 @@ TARGET=main
 
 all: $(TARGET)
 
-$(TARGET): $(TARGET_OBJ)
-	$(CC) $(CFLAGS) -o $(OBJS_FOR_LIB) -c $(SRCS_FOR_LIB)
+OBJS_FOR_LIB := $(SRCS_FOR_LIB:.c=.o)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TARGET): $(TARGET_OBJ) $(OBJS_FOR_LIB)
 	make static_library
 	$(CC) $(CFLAGS) -o $@ $^ -L $(LIBS) -lbpt
 
