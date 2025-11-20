@@ -1,4 +1,5 @@
-#include "file.h";
+#include "file.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -23,20 +24,20 @@ pagenum_t file_alloc_page() {
   free_page_t free_page;
   pagenum_t allocated_page_num;
 
-  file_read_page(HEADER_PAGE_POS, &header);
+  file_read_page(HEADER_PAGE_POS, (page_t *)&header);
   allocated_page_num = header.free_page_num;
 
   if (allocated_page_num == PAGE_NULL) {
     pagenum_t new_page_num = header.num_of_pages;
     header.num_of_pages += 1;
-    file_write_page(HEADER_PAGE_POS, &header);
+    file_write_page(HEADER_PAGE_POS, (page_t *)&header);
 
     return new_page_num;
   }
 
-  file_read_page(allocated_page_num, &free_page);
+  file_read_page(allocated_page_num, (page_t *)&free_page);
   header.free_page_num = free_page.next_free_page_num;
-  file_write_page(HEADER_PAGE_POS, &header);
+  file_write_page(HEADER_PAGE_POS, (page_t *)&header);
 
   return allocated_page_num;
 }
@@ -50,7 +51,7 @@ void file_free_page(pagenum_t pagenum) {
   free_page_t new_free_page;
 
   // 헤더 페이지를 읽어와서 프리 페이지 리스트 참조
-  file_read_page(HEADER_PAGE_POS, &header);
+  file_read_page(HEADER_PAGE_POS, (page_t *)&header);
   new_free_page.next_free_page_num = header.free_page_num;
   header.free_page_num = pagenum;
 
