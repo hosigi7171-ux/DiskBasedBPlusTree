@@ -1,7 +1,9 @@
 #include "file.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
 
 int fd = -1; // temp file discripter
 
@@ -49,6 +51,7 @@ void file_free_page(pagenum_t pagenum) {
   header_page_t header;
   page_t removing_page;
   free_page_t new_free_page;
+  memset(&new_free_page, 0, PAGE_SIZE);
 
   // 헤더 페이지를 읽어와서 프리 페이지 리스트 참조
   file_read_page(HEADER_PAGE_POS, (page_t *)&header);

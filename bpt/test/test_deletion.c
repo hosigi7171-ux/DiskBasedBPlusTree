@@ -14,7 +14,7 @@
 #define SUCCESS 0
 #define FAILURE 1
 
-#define HEADER_PAGE_NUM 1
+#define HEADER_PAGE_NUM HEADER_PAGE_POS
 #define PAGE_SIZE 4096
 #define PAGE_NULL 0
 #define LEAF 1
@@ -31,7 +31,7 @@ void tearDown(void) {}
  * @brief Root(Leaf)에 키가 하나만 있을 때, 삭제 후 루트가 NULL이 되는지 확인
  */
 void test_delete_root_becomes_empty(void) {
-  pagenum_t ROOT_NUM = 2;
+  pagenum_t ROOT_NUM = 1;
   const char *DELETE_VALUE = "val5";
 
   // 1. Initial Setup: Root(P2)
@@ -65,9 +65,9 @@ void test_delete_root_becomes_empty(void) {
  * @brief P4(Target)에서 삭제 후 P3(Neighbor)와 재분배
  */
 void test_delete_leaf_redistribution_R_to_L(void) {
-  pagenum_t ROOT_NUM = 2;
-  pagenum_t P3 = 3; // neighbor(left)
-  pagenum_t P4 = 4; // target
+  pagenum_t ROOT_NUM = 1;
+  pagenum_t P3 = 2; // neighbor(left)
+  pagenum_t P4 = 3; // target
   const char *DELETE_VALUE = "val4";
 
   header_page_t *h0 = (header_page_t *)&MOCK_PAGES[HEADER_PAGE_NUM];
@@ -129,10 +129,10 @@ void test_delete_leaf_redistribution_R_to_L(void) {
  * P4 해제 및 P2(Root) 붕괴 후 P2 해제
  */
 void test_delete_leaf_coalesce_swap_R_to_L(void) {
-  pagenum_t ROOT_NUM = 2;
-  pagenum_t P3 = 3; // target
-  pagenum_t P4 = 4; // neighbor(right)
-  pagenum_t P5 = 5;
+  pagenum_t ROOT_NUM = 1;
+  pagenum_t P3 = 2; // target
+  pagenum_t P4 = 3; // neighbor(right)
+  pagenum_t P5 = 4;
   const char *DELETE_VALUE = "val3";
 
   header_page_t *h0 = (header_page_t *)&MOCK_PAGES[HEADER_PAGE_NUM];
@@ -194,19 +194,19 @@ void test_delete_leaf_coalesce_swap_R_to_L(void) {
  * 새로운 루트로 승격
  */
 void test_delete_internal_coalesce(void) {
-  pagenum_t ROOT_NUM = 2;
-  pagenum_t P3 = 3; // neighbor(left)
-  pagenum_t P4 = 4; // target
-  pagenum_t L5 = 5; // P3 one_more_page_num3
-  pagenum_t L8 = 8; // P3 entries[0].page_num
-  pagenum_t L6 = 6; // P4 one_more_page_num
-  pagenum_t L7 = 7; // P4 entries[0].page_num
+  pagenum_t ROOT_NUM = 1;
+  pagenum_t P3 = 2; // neighbor(left)
+  pagenum_t P4 = 3; // target
+  pagenum_t L5 = 4; // P3 one_more_page_num3
+  pagenum_t L8 = 7; // P3 entries[0].page_num
+  pagenum_t L6 = 5; // P4 one_more_page_num
+  pagenum_t L7 = 6; // P4 entries[0].page_num
 
   int64_t K_PRIME = 50; // separator key in root
 
   header_page_t *h0 = (header_page_t *)&MOCK_PAGES[HEADER_PAGE_NUM];
   h0->root_page_num = ROOT_NUM;
-  h0->num_of_pages = 9;
+  h0->num_of_pages = 8;
 
   internal_page_t *i1 = (internal_page_t *)&MOCK_PAGES[ROOT_NUM];
   i1->is_leaf = INTERNAL;
@@ -278,14 +278,14 @@ void test_delete_internal_coalesce(void) {
  *
  */
 void test_delete_leaf_redistribute_when_target_is_empty(void) {
-  pagenum_t ROOT_NUM = 2;
-  pagenum_t P3 = 3; // neighbor(left)
-  pagenum_t P4 = 4; // target
+  pagenum_t ROOT_NUM = 1;
+  pagenum_t P3 = 2; // neighbor(left)
+  pagenum_t P4 = 3; // target
   const char *DELETE_VALUE = "val50";
 
   header_page_t *h0 = (header_page_t *)&MOCK_PAGES[HEADER_PAGE_NUM];
   h0->root_page_num = ROOT_NUM;
-  h0->num_of_pages = 5;
+  h0->num_of_pages = 4;
 
   internal_page_t *i2 = (internal_page_t *)&MOCK_PAGES[ROOT_NUM];
   i2->is_leaf = INTERNAL;

@@ -22,7 +22,7 @@ typedef uint64_t magicnum_t;
 #define LEAF 1
 #define INTERNAL 0
 #define PAGE_NULL 0
-#define HEADER_PAGE_POS 1
+#define HEADER_PAGE_POS 0
 
 typedef struct {
   pagenum_t free_page_num;

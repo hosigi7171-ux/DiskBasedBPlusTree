@@ -35,19 +35,19 @@ void test_insert_start_new_tree(void) {
   int64_t key = 10;
   char value[] = "Value_10";
 
-  // 초기 상태 체크: 루트 없음 (P0), 페이지 수 2 (헤더 P1 + 유휴 P0)
+  // 초기 상태 체크: 루트 없음 (P0)
   header_page_t initial_header = get_header_page();
   TEST_ASSERT_EQUAL_INT64(PAGE_NULL, initial_header.root_page_num);
-  TEST_ASSERT_EQUAL_UINT64(2, initial_header.num_of_pages);
+  TEST_ASSERT_EQUAL_UINT64(1, initial_header.num_of_pages);
 
   TEST_ASSERT_EQUAL(SUCCESS, insert(key, value));
 
   // 결과 검증
-  // 헤더 페이지 검증: root_page_num이 새로 할당된 페이지 (P2)로
+  // 헤더 페이지 검증: root_page_num이 새로 할당된 페이지 (P1)로
   // 업데이트되었는지 확인
   header_page_t final_header = get_header_page();
-  TEST_ASSERT_EQUAL_INT64(2, final_header.root_page_num);
-  TEST_ASSERT_EQUAL_UINT64(3, final_header.num_of_pages);
+  TEST_ASSERT_EQUAL_INT64(1, final_header.root_page_num);
+  TEST_ASSERT_EQUAL_UINT64(2, final_header.num_of_pages);
 
   // 루트 페이지 (P2) 검증: leaf 속성과 내용 확인
   leaf_page_t root_page = get_leaf_page(final_header.root_page_num);
@@ -70,7 +70,7 @@ void test_insert_into_leaf_simple(void) {
   TEST_ASSERT_EQUAL(SUCCESS, insert(key_new, value_new));
 
   // 결과 검증
-  leaf_page_t leaf = get_leaf_page(2);
+  leaf_page_t leaf = get_leaf_page(1);
   TEST_ASSERT_EQUAL_INT(2, leaf.num_of_keys);
   TEST_ASSERT_EQUAL_INT64(PAGE_NULL, leaf.parent_page_num);
 
@@ -115,7 +115,7 @@ void test_insert_split_leaf_and_new_root(void) {
     insert(i, value);
   }
 
-  leaf_page_t leaf_full = get_leaf_page(2);
+  leaf_page_t leaf_full = get_leaf_page(1);
   TEST_ASSERT_EQUAL_INT(RECORD_CNT, leaf_full.num_of_keys);
   TEST_ASSERT_EQUAL_INT64(1, leaf_full.records[0].key);
   TEST_ASSERT_EQUAL_INT64(RECORD_CNT, leaf_full.records[RECORD_CNT - 1].key);
@@ -129,33 +129,33 @@ void test_insert_split_leaf_and_new_root(void) {
   // 헤더 검증: 새 루트 페이지 (P4) 설정 확인
   header_page_t final_header = get_header_page();
   // Pages: 0(유휴), 1(헤더), 2(Old Leaf), 3(New Leaf), 4(New Root)
-  TEST_ASSERT_EQUAL_UINT64(5, final_header.num_of_pages);
-  TEST_ASSERT_EQUAL_INT64(4, final_header.root_page_num);
+  TEST_ASSERT_EQUAL_UINT64(4, final_header.num_of_pages);
+  TEST_ASSERT_EQUAL_INT64(3, final_header.root_page_num);
 
   // Old Leaf (P2) 검증
-  leaf_page_t old_leaf = get_leaf_page(2);
+  leaf_page_t old_leaf = get_leaf_page(1);
   TEST_ASSERT_EQUAL_INT(1, old_leaf.num_of_keys);
-  TEST_ASSERT_EQUAL_INT64(4, old_leaf.parent_page_num);
-  TEST_ASSERT_EQUAL_INT64(3, old_leaf.right_sibling_page_num);
+  TEST_ASSERT_EQUAL_INT64(3, old_leaf.parent_page_num);
+  TEST_ASSERT_EQUAL_INT64(2, old_leaf.right_sibling_page_num);
   TEST_ASSERT_EQUAL_INT64(1, old_leaf.records[0].key);
 
   // New Leaf (P3) 검증
-  leaf_page_t new_leaf = get_leaf_page(3);
+  leaf_page_t new_leaf = get_leaf_page(2);
   TEST_ASSERT_EQUAL_INT(2, new_leaf.num_of_keys);
-  TEST_ASSERT_EQUAL_INT64(4, new_leaf.parent_page_num);
+  TEST_ASSERT_EQUAL_INT64(3, new_leaf.parent_page_num);
   TEST_ASSERT_EQUAL_INT64(PAGE_NULL, new_leaf.right_sibling_page_num);
   TEST_ASSERT_EQUAL_INT64(2, new_leaf.records[0].key);
   TEST_ASSERT_EQUAL_INT64(3, new_leaf.records[1].key);
 
   // New Root (P4) 검증
-  internal_page_t new_root = get_internal_page(4);
+  internal_page_t new_root = get_internal_page(3);
   TEST_ASSERT_EQUAL(INTERNAL, new_root.is_leaf);
   TEST_ASSERT_EQUAL_INT(1, new_root.num_of_keys);
   TEST_ASSERT_EQUAL_INT64(PAGE_NULL, new_root.parent_page_num);
 
-  TEST_ASSERT_EQUAL_INT64(2, new_root.one_more_page_num);
+  TEST_ASSERT_EQUAL_INT64(1, new_root.one_more_page_num);
   TEST_ASSERT_EQUAL_INT64(2, new_root.entries[0].key);
-  TEST_ASSERT_EQUAL_INT64(3, new_root.entries[0].page_num);
+  TEST_ASSERT_EQUAL_INT64(2, new_root.entries[0].page_num);
 }
 
 /**
@@ -177,36 +177,36 @@ void test_insert_into_internal_node_simple(void) {
   // 헤더 검증: 새 페이지 (P5) 할당 확인
   header_page_t final_header = get_header_page();
   // Pages: ..., 4(Root), 5(New Leaf)
-  TEST_ASSERT_EQUAL_UINT64(6, final_header.num_of_pages);
+  TEST_ASSERT_EQUAL_UINT64(5, final_header.num_of_pages);
 
   // Old Leaf (P3) 검증 (2)
-  leaf_page_t old_leaf = get_leaf_page(3);
+  leaf_page_t old_leaf = get_leaf_page(2);
   TEST_ASSERT_EQUAL_INT(1, old_leaf.num_of_keys);
-  TEST_ASSERT_EQUAL_INT64(4, old_leaf.parent_page_num);
-  TEST_ASSERT_EQUAL_INT64(5, old_leaf.right_sibling_page_num);
+  TEST_ASSERT_EQUAL_INT64(3, old_leaf.parent_page_num);
+  TEST_ASSERT_EQUAL_INT64(4, old_leaf.right_sibling_page_num);
   TEST_ASSERT_EQUAL_INT64(2, old_leaf.records[0].key);
 
   // New Leaf (P5) 검증 (3, 4)
-  leaf_page_t new_leaf = get_leaf_page(5);
+  leaf_page_t new_leaf = get_leaf_page(4);
   TEST_ASSERT_EQUAL_INT(2, new_leaf.num_of_keys);
-  TEST_ASSERT_EQUAL_INT64(4, new_leaf.parent_page_num);
+  TEST_ASSERT_EQUAL_INT64(3, new_leaf.parent_page_num);
   TEST_ASSERT_EQUAL_INT64(PAGE_NULL, new_leaf.right_sibling_page_num);
   TEST_ASSERT_EQUAL_INT64(3, new_leaf.records[0].key);
   TEST_ASSERT_EQUAL_INT64(4, new_leaf.records[1].key);
 
   // Root (P4) 검증
-  internal_page_t root = get_internal_page(4);
+  internal_page_t root = get_internal_page(3);
   TEST_ASSERT_EQUAL(INTERNAL, root.is_leaf);
   TEST_ASSERT_EQUAL_INT(2, root.num_of_keys);
   TEST_ASSERT_EQUAL_INT64(PAGE_NULL, root.parent_page_num);
 
   TEST_ASSERT_EQUAL_INT64(2, root.entries[0].key);
-  TEST_ASSERT_EQUAL_INT64(3, root.entries[0].page_num);
+  TEST_ASSERT_EQUAL_INT64(2, root.entries[0].page_num);
 
   TEST_ASSERT_EQUAL_INT64(3, root.entries[1].key);
-  TEST_ASSERT_EQUAL_INT64(5, root.entries[1].page_num);
+  TEST_ASSERT_EQUAL_INT64(4, root.entries[1].page_num);
 
-  TEST_ASSERT_EQUAL_INT64(2, root.one_more_page_num);
+  TEST_ASSERT_EQUAL_INT64(1, root.one_more_page_num);
 }
 
 /**
@@ -226,7 +226,7 @@ void test_insert_split_internal_node(void) {
     i++;
   }
   // Root P4가 16 entries로 가득 찼는지 확인
-  internal_page_t root_full = get_internal_page(4);
+  internal_page_t root_full = get_internal_page(3);
   TEST_ASSERT_EQUAL_INT(16, root_full.num_of_keys);
   TEST_ASSERT_EQUAL_INT64(17, root_full.entries[15].key);
 
@@ -239,9 +239,9 @@ void test_insert_split_internal_node(void) {
   // 페이지 번호 검증 및 새 Root (P22), New Internal (P21) 확인
   header_page_t header = get_header_page();
   pagenum_t new_root_num = header.root_page_num;
-  pagenum_t old_root_num = 4;
-  pagenum_t new_internal_num = 21;
-  TEST_ASSERT_EQUAL_INT64(22, new_root_num);
+  pagenum_t old_root_num = 3;
+  pagenum_t new_internal_num = 20;
+  TEST_ASSERT_EQUAL_INT64(21, new_root_num);
 
   // Root Split 검증: cut(17) = 9.
   // Old Internal (P4): 8 entries (키 2, 3, ..., 9).
@@ -274,7 +274,7 @@ void test_insert_split_internal_node(void) {
 
   // New Internal Node(P32) 할당 확인
   header = get_header_page();
-  pagenum_t p31_new_internal_num = 32;
+  pagenum_t p31_new_internal_num = 31;
   TEST_ASSERT_EQUAL_INT64(p31_new_internal_num, header.num_of_pages - 1);
 
   // Root(P20) 검증

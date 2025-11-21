@@ -27,7 +27,7 @@ pagenum_t MOCK_file_alloc_page(int num_calls) {
     return 0;
   }
   // 처음 헤더에 루트 페이지 설정
-  if (header.num_of_pages == 2) {
+  if (header.num_of_pages == 1) {
     header.root_page_num = new_page_num;
   }
 
