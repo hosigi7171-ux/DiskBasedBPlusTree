@@ -11,6 +11,7 @@ bpt/build/test/runners/*
 *.fail
 *.pass
 file_test
+*.db
 
 # Libraries
 lib/*.a
