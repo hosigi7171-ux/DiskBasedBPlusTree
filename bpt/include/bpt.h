@@ -27,8 +27,8 @@
 #define SUCCESS 0
 #define FAILURE -1
 #define CANNOT_ROOT -2
-#define MAX_RANGE_SIZE 500 // for finding range
-#define MIN_KEYS 1         // for delayed merge
+#define MAX_RANGE_SIZE 10000 // for finding range
+#define MIN_KEYS 1           // for delayed merge
 
 // Constants for printing part or all of the GPL license.
 #define LICENSE_FILE "LICENSE.txt"
@@ -67,7 +67,7 @@ int height(pagenum_t header_page_num);
 void print_leaves(void);
 void print_tree();
 void find_and_print(int64_t key);
-void find_and_print_range(int64_t key_start, int64_t key_end);
+int find_and_print_range(int64_t key_start, int64_t key_end);
 int find_range(int64_t key_start, int64_t key_end, int64_t returned_keys[],
                pagenum_t returned_pages[], int returned_indices[]);
 pagenum_t find_leaf(int64_t key);

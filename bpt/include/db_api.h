@@ -18,6 +18,6 @@ int db_delete(int64_t key);
 int close_table(void);
 void db_print_tree(void);
 void db_print_leaves(void);
-void db_find_and_print_range(int64_t key_start, int64_t key_end);
+int db_find_and_print_range(int64_t key_start, int64_t key_end);
 
 #endif

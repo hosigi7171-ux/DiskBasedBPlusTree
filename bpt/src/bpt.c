@@ -118,7 +118,7 @@ void usage(void) {
   printf("  f <key>        Find and print the value for <key>\n");
   printf("  d <key>        Delete <key> and its value\n");
   printf("  r <k1> <k2>    Print all keys and values in range [min(k1,k2) ... "
-         "max(k1,k2)]\n");
+         "max(k1,k2)] (max range is 10000)\n");
   printf("  t              Print the entire B+ tree structure\n");
   printf("  q              Quit the program (closes the current table)\n");
   printf("  ?              Show this help message\n\n");
@@ -337,11 +337,15 @@ void find_and_print(int64_t key) {
 /* Finds and prints the keys, pointers, and values within a range
  * of keys between key_start and key_end, including both bounds.
  */
-void find_and_print_range(int64_t key_start, int64_t key_end) {
+int find_and_print_range(int64_t key_start, int64_t key_end) {
   int i;
   int64_t returned_keys[MAX_RANGE_SIZE];
   pagenum_t returned_pages[MAX_RANGE_SIZE];
   int returned_indices[MAX_RANGE_SIZE];
+
+  if (key_end - key_start > MAX_RANGE_SIZE) {
+    return FAILURE;
+  }
 
   int num_found = find_range(key_start, key_end, returned_keys, returned_pages,
                              returned_indices);
@@ -367,6 +371,7 @@ void find_and_print_range(int64_t key_start, int64_t key_end) {
              key, returned_pages[i], index, value_ptr);
     }
   }
+  return SUCCESS;
 }
 
 /* Finds keys and their pointers, if present, in the range specified

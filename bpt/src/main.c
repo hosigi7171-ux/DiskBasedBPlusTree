@@ -90,7 +90,9 @@ int main(int argc, char **argv) {
             range = input_key;
             input_key = tmp;
           }
-          db_find_and_print_range(input_key, range);
+          if (db_find_and_print_range(input_key, range) != SUCCESS) {
+            printf("please check range\n");
+          }
           break;
 
         case 't':

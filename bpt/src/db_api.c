@@ -11,7 +11,7 @@ int global_table_id = -1;
  * Otherwise, return negative value
  */
 int open_table(char *pathname) {
-  mode_t mode = 0600; // only owner rw
+  mode_t mode = 0644;
   if ((fd = open(pathname, O_RDWR | O_CREAT, mode)) == -1) {
     return FAILURE;
   }
@@ -61,7 +61,7 @@ int db_find(int64_t key, char *ret_val) {
  */
 int db_delete(int64_t key) {
   int result = delete (key);
-  if (result) {
+  if (result == SUCCESS) {
     return SUCCESS;
   }
   return FAILURE;
@@ -87,12 +87,14 @@ void db_print_leaves(void) {
   print_leaves();
 }
 
-void db_find_and_print_range(int64_t key_start, int64_t key_end) {
+int db_find_and_print_range(int64_t key_start, int64_t key_end) {
   if (global_table_id < 0) {
     printf("table not open\n");
-    return;
+    return FAILURE;
   }
-  find_and_print_range(key_start, key_end);
+  if (find_and_print_range(key_start, key_end) != SUCCESS) {
+    return FAILURE;
+  };
 }
 
 int close_table(void) {
