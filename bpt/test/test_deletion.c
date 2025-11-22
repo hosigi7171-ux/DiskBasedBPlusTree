@@ -1,5 +1,10 @@
-
 #include "bpt.h"
+#include "bpt_internal.h"
+#include "bptree.h"
+#include "bptree_delete.h"
+#include "bptree_find.h"
+#include "bptree_insert.h"
+#include "bptree_utils.h"
 #include "helper_mock.h"
 #include "mock_file.h"
 #include "page.h"
@@ -12,7 +17,7 @@
 #define MIN_KEYS 1
 
 #define SUCCESS 0
-#define FAILURE 1
+#define FAILURE -1
 
 #define HEADER_PAGE_NUM HEADER_PAGE_POS
 #define PAGE_SIZE 4096
@@ -171,9 +176,11 @@ void test_delete_leaf_coalesce_swap_R_to_L(void) {
   file_free_page_Expect(P4);
   file_free_page_Expect(ROOT_NUM);
 
-  pagenum_t NEW_ROOT = delete_entry(P3, 3, DELETE_VALUE);
+  int result = delete_entry(P3, 3, DELETE_VALUE);
+  pagenum_t NEW_ROOT = h0->root_page_num;
 
   // 3. Verification
+  TEST_ASSERT_EQUAL_INT(SUCCESS, result);
   TEST_ASSERT_EQUAL_HEX64(P3, NEW_ROOT);
 
   // check target status

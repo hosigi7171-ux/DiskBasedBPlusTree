@@ -1,5 +1,10 @@
-
 #include "bpt.h"
+#include "bpt_internal.h"
+#include "bptree.h"
+#include "bptree_delete.h"
+#include "bptree_find.h"
+#include "bptree_insert.h"
+#include "bptree_utils.h"
 #include "helper_mock.h"
 #include "mock_file.h"
 #include "page.h"

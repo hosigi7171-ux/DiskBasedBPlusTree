@@ -97,7 +97,8 @@ int insert(int64_t key, char *value);
 // Deletion.
 
 int get_kprime_index(pagenum_t target_node);
-int remove_record_from_node(leaf_page_t *target_page, int64_t key, char *value);
+int remove_record_from_node(leaf_page_t *target_page, int64_t key,
+                            const char *value);
 int remove_entry_from_node(internal_page_t *target_page, int64_t key);
 pagenum_t adjust_root(pagenum_t root);
 int coalesce_nodes(pagenum_t target_num, pagenum_t neighbor_num,
@@ -105,7 +106,7 @@ int coalesce_nodes(pagenum_t target_num, pagenum_t neighbor_num,
 int redistribute_nodes(pagenum_t target_num, pagenum_t neighbor_num,
                        int kprime_index_from_get, int k_prime_index,
                        int k_prime);
-int delete_entry(pagenum_t target_node, int64_t key, char *value);
+int delete_entry(pagenum_t target_node, int64_t key, const char *value);
 int delete (int64_t key);
 
 void destroy_tree_nodes(pagenum_t root);
