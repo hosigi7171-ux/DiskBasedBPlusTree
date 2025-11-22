@@ -312,7 +312,7 @@ pagenum_t find_leaf(int64_t key) {
     }
     if (cur_num == PAGE_NULL) {
       // 이거는 실행 안되어야 함
-      perror("find_leaf");
+      // perror("find_leaf");
       return PAGE_NULL;
     }
   }
