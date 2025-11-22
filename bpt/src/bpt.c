@@ -53,6 +53,54 @@
  */
 
 #include "bpt.h"
+
+/**
+ * Declaration of helper functions used only here
+ */
+record_t *prepare_records_for_split(leaf_page_t *leaf_page, int64_t key,
+                                    const char *value);
+int64_t distribute_records_to_leaves(leaf_page_t *leaf_page,
+                                     leaf_page_t *new_leaf_page,
+                                     record_t *temp_records,
+                                     pagenum_t new_leaf_num);
+entry_t *prepare_entries_for_split(internal_page_t *old_node_page,
+                                   int64_t left_index, int64_t key,
+                                   pagenum_t right);
+int64_t distribute_entries_and_update_children(pagenum_t old_node_num,
+                                               internal_page_t *old_node_page,
+                                               pagenum_t new_node_num,
+                                               internal_page_t *new_node_page,
+                                               entry_t *temp_entries);
+void coalesce_internal_nodes(page_t *neighbor_buf, page_t *target_buf,
+                             int neighbor_num, int64_t k_prime);
+void coalesce_leaf_nodes(page_t *neighbor_buf, page_t *target_buf);
+void redistribute_from_left(pagenum_t target_num, page_t *target_buf,
+                            page_t *neighbor_buf, internal_page_t *parent_page,
+                            int k_prime_index, int k_prime);
+void redistribute_internal_from_left(pagenum_t target_num, page_t *target_buf,
+                                     page_t *neighbor_buf,
+                                     internal_page_t *parent_page,
+                                     int k_prime_index, int k_prime);
+void redistribute_leaf_from_left(page_t *target_buf, page_t *neighbor_buf,
+                                 internal_page_t *parent_page,
+                                 int k_prime_index);
+void redistribute_from_right(pagenum_t target_num, page_t *target_buf,
+                             page_t *neighbor_buf, internal_page_t *parent_page,
+                             int k_prime_index, int k_prime);
+void redistribute_internal_from_right(pagenum_t target_num, page_t *target_buf,
+                                      page_t *neighbor_buf,
+                                      internal_page_t *parent_page,
+                                      int k_prime_index, int k_prime);
+void redistribute_leaf_from_right(page_t *target_buf, page_t *neighbor_buf,
+                                  internal_page_t *parent_page,
+                                  int k_prime_index);
+int find_neighbor_and_kprime(pagenum_t target_node,
+                             internal_page_t *parent_page,
+                             page_header_t *target_header,
+                             pagenum_t *neighbor_num_out,
+                             int *k_prime_key_index_out);
+int handle_underflow(pagenum_t target_node);
+
 // GLOBALS.
 
 /* The queue is used to print the tree in
@@ -618,87 +666,113 @@ int insert_into_leaf(pagenum_t leaf_num, page_t *leaf_buffer, int64_t key,
   return SUCCESS;
 }
 
-/* Inserts a new key and pointer
- * to a new record into a leaf so as to exceed
- * the tree's order, causing the leaf to be split
- * in half.
+/**
+ * helper function for insert_into_leaf_after_splitting
+ * Create a temporary array by combining the existing record and the new record
+ * and return it
  */
-int insert_into_leaf_after_splitting(pagenum_t leaf_num, int64_t key,
-                                     char *value) {
-  pagenum_t new_leaf_num;
-  int64_t new_key;
-  record_t *temp_records;
-  int insertion_index, split, i, j;
+record_t *prepare_records_for_split(leaf_page_t *leaf_page, int64_t key,
+                                    const char *value) {
 
-  new_leaf_num = make_leaf();
-
-  temp_records = (record_t *)malloc(RECORD_CNT * sizeof(record_t));
+  record_t *temp_records = (record_t *)malloc(RECORD_CNT * sizeof(record_t));
   if (temp_records == NULL) {
-    perror("Temporary records array.");
+    perror("Memory allocation for temporary records failed.");
     exit(EXIT_FAILURE);
   }
 
-  // leaf_page 읽기
-  page_t tmp_page;
-  file_read_page(leaf_num, &tmp_page);
-  leaf_page_t *leaf_page = (leaf_page_t *)&tmp_page;
-
-  // 삽입 위치 찾기
-  insertion_index = 0;
+  int insertion_index = 0;
   while (insertion_index < RECORD_CNT &&
          leaf_page->records[insertion_index].key < key) {
     insertion_index++;
   }
 
-  // temp_records에 leaf_page의 레코드 내용 옮기기 + 삽입 내용 세팅
+  int i, j;
   for (i = 0, j = 0; i < leaf_page->num_of_keys; i++, j++) {
     if (j == insertion_index) {
       j++;
     }
     temp_records[j] = leaf_page->records[i];
   }
+
+  // insert new record
   temp_records[insertion_index].key = key;
   copy_value(temp_records[insertion_index].value, value, VALUE_SIZE);
 
-  // 분할 지점 계산
-  split = cut(RECORD_CNT);
+  return temp_records;
+}
 
-  // 분할 지점까지 old_leaf_page에 할당
+/**
+ * helper function for insert_into_leaf_after_splitting
+ * Distributes records in the temporary array to old_leaf and new_leaf and
+ * returns k_prime
+ */
+int64_t distribute_records_to_leaves(leaf_page_t *leaf_page,
+                                     leaf_page_t *new_leaf_page,
+                                     record_t *temp_records,
+                                     pagenum_t new_leaf_num) {
+
+  const int split = cut(RECORD_CNT);
+
+  int i, j;
+
+  // Allocate to old_leaf_page until split point
   leaf_page->num_of_keys = 0;
   for (i = 0; i < split; i++) {
     leaf_page->records[i] = temp_records[i];
     leaf_page->num_of_keys++;
   }
-  for (i = split; i < RECORD_CNT; i++) {
-    memset(&(leaf_page->records[i]), 0, sizeof(record_t));
+  for (int k = split; k < RECORD_CNT; k++) {
+    memset(&(leaf_page->records[k]), 0, sizeof(record_t));
   }
 
-  // new_leaf_page 읽기
-  page_t tmp_new_page;
-  file_read_page(new_leaf_num, &tmp_new_page);
-  leaf_page_t *new_leaf_page = (leaf_page_t *)&tmp_new_page;
-
-  // 분할 지점 이후의 records는 new_leaf_page에 할당
-  for (i = split, j = 0; i < LEAF_ORDER; i++, j++) {
+  // Records after the split point are allocated to new_leaf_page
+  new_leaf_page->num_of_keys = 0;
+  for (j = 0; i < LEAF_ORDER; i++, j++) {
     new_leaf_page->records[j] = temp_records[i];
     new_leaf_page->num_of_keys++;
   }
-  for (i = new_leaf_page->num_of_keys; i < RECORD_CNT; i++) {
-    memset(&(new_leaf_page->records[i]), 0, sizeof(record_t));
+  for (int k = new_leaf_page->num_of_keys; k < RECORD_CNT; k++) {
+    memset(&(new_leaf_page->records[k]), 0, sizeof(record_t));
   }
 
-  free(temp_records);
-  // 형제 노드 연결 및 부모 노드 설정
+  // Connect sibling nodes and set parent nodes
   new_leaf_page->right_sibling_page_num = leaf_page->right_sibling_page_num;
   leaf_page->right_sibling_page_num = new_leaf_num;
   new_leaf_page->parent_page_num = leaf_page->parent_page_num;
 
-  new_key = new_leaf_page->records[0].key;
+  return new_leaf_page->records[0].key;
+}
+
+/**
+ * Splits a node into two by inserting a new key and record into the leaf and
+ * passing the split information to the parent
+ */
+int insert_into_leaf_after_splitting(pagenum_t leaf_num, int64_t key,
+                                     char *value) {
+  pagenum_t new_leaf_num;
+  int64_t new_key;
+  record_t *temp_records;
+
+  new_leaf_num = make_leaf();
+
+  page_t tmp_old_page;
+  file_read_page(leaf_num, &tmp_old_page);
+  leaf_page_t *leaf_page = (leaf_page_t *)&tmp_old_page;
+
+  temp_records = prepare_records_for_split(leaf_page, key, value);
+
+  page_t tmp_new_page;
+  file_read_page(new_leaf_num, &tmp_new_page);
+  leaf_page_t *new_leaf_page = (leaf_page_t *)&tmp_new_page;
+
+  new_key = distribute_records_to_leaves(leaf_page, new_leaf_page, temp_records,
+                                         new_leaf_num);
+
+  free(temp_records);
 
   file_write_page(leaf_num, (page_t *)leaf_page);
   file_write_page(new_leaf_num, (page_t *)new_leaf_page);
 
-  // 부모 페이지에 반영
   return insert_into_parent(leaf_num, new_key, new_leaf_num);
 }
 
@@ -725,118 +799,132 @@ int insert_into_node(pagenum_t page_num, int64_t left_index, int64_t key,
   return SUCCESS;
 }
 
-/* Inserts a new key and pointer to a node
- * into a node, causing the node's size to exceed
- * the order, and causing the node to split into two.
+/**
+ * helper function for insert_into_node_after_splitting
+ * Returns a temporary array created by combining the existing entries and the
+ * new entries
  */
-int insert_into_node_after_splitting(pagenum_t old_node, int64_t left_index,
-                                     int64_t key, pagenum_t right) {
-  int i, j, split;
-  int64_t k_prime;
-  pagenum_t new_node, child;
-  entry_t *temp_entries;
+entry_t *prepare_entries_for_split(internal_page_t *old_node_page,
+                                   int64_t left_index, int64_t key,
+                                   pagenum_t right) {
 
-  /* First create a temporary set of keys and pointers
-   * to hold everything in order, including
-   * the new key and pointer, inserted in their
-   * correct places.
-   * Then create a new node and copy half of the
-   * keys and pointers to the old node and
-   * the other half to the new.
-   */
-
-  // old_node 페이지 읽기
-  page_t tmp_old_page;
-  file_read_page(old_node, &tmp_old_page);
-  internal_page_t *old_node_page = (internal_page_t *)&tmp_old_page;
-
-  // temporary entry 할당
-  temp_entries = (entry_t *)malloc((ENTRY_CNT) * sizeof(entry_t));
+  entry_t *temp_entries = (entry_t *)malloc((ENTRY_CNT) * sizeof(entry_t));
   if (temp_entries == NULL) {
     perror("Temporary entries array.");
     exit(EXIT_FAILURE);
   }
 
-  // 기존 엔트리를 임시 배열에 복사
+  int i;
   for (i = 0; i < old_node_page->num_of_keys; i++) {
     temp_entries[i] = old_node_page->entries[i];
   }
 
-  // 새로운 엔트리 삽입 위치 확보 및 삽입
+  // insert new entry
   for (i = old_node_page->num_of_keys; i > left_index; i--) {
     temp_entries[i] = temp_entries[i - 1];
   }
   temp_entries[left_index].key = key;
   temp_entries[left_index].page_num = right;
 
-  /* Create the new node and copy
-   * half the keys and pointers to the
-   * old and half to the new.
-   */
-  split = cut(INTERNAL_ORDER);
-  new_node = make_node(INTERNAL);
+  return temp_entries;
+}
 
-  k_prime = temp_entries[split - 1].key;
+/**
+ * helper function for insert_into_node_after_splitting
+ * Distribute temp_entries to old_node and new_node, and return k_prime
+ */
+int64_t distribute_entries_and_update_children(pagenum_t old_node_num,
+                                               internal_page_t *old_node_page,
+                                               pagenum_t new_node_num,
+                                               internal_page_t *new_node_page,
+                                               entry_t *temp_entries) {
 
+  const int split = cut(INTERNAL_ORDER);
+  int i, j;
+
+  // key to send to parents
+  const int64_t k_prime = temp_entries[split - 1].key;
+
+  // Reassign entries to Old Node
   old_node_page->num_of_keys = 0;
   for (i = 0; i < split - 1; i++) {
     old_node_page->entries[i] = temp_entries[i];
     old_node_page->num_of_keys++;
   }
-  for (i = split - 1; i < ENTRY_CNT; i++) {
-    memset(&(old_node_page->entries[i]), 0, sizeof(entry_t));
+  for (int k = split - 1; k < ENTRY_CNT; k++) {
+    memset(&(old_node_page->entries[k]), 0, sizeof(entry_t));
   }
 
-  // new_node 페이지 읽기
-  page_t tmp_new_page;
-  file_read_page(new_node, &tmp_new_page);
-  internal_page_t *new_node_page = (internal_page_t *)&tmp_new_page;
-
-  // New node의 P0가 될 포인터는
-  // k_prime의 오른쪽 포인터
+  // Set the P0 pointer of the new node (the right pointer of k_prime)
   pagenum_t new_node_p0 = temp_entries[split - 1].page_num;
   new_node_page->one_more_page_num = new_node_p0;
 
+  // Assigning entries to new nodes
+  new_node_page->num_of_keys = 0;
   for (i = split, j = 0; i < INTERNAL_ORDER; i++, j++) {
     new_node_page->entries[j] = temp_entries[i];
     new_node_page->num_of_keys++;
   }
-  for (i = new_node_page->num_of_keys; i < ENTRY_CNT; i++) {
-    memset(&(new_node_page->entries[i]), 0, sizeof(entry_t));
+  for (int k = new_node_page->num_of_keys; k < ENTRY_CNT; k++) {
+    memset(&(new_node_page->entries[k]), 0, sizeof(entry_t));
   }
 
-  free(temp_entries);
-
   new_node_page->parent_page_num = old_node_page->parent_page_num;
-  child = new_node_page->one_more_page_num;
+
+  // Update the parent of a child node
+  pagenum_t child = new_node_page->one_more_page_num;
   page_t tmp_child_page;
   if (child != PAGE_NULL) {
     file_read_page(child, &tmp_child_page);
     page_header_t *child_page_header = (page_header_t *)&tmp_child_page;
-    child_page_header->parent_page_num = new_node;
+    child_page_header->parent_page_num = new_node_num;
     file_write_page(child, (page_t *)child_page_header);
   }
-
-  // New node의 엔트리 자식 업데이트
   for (i = 0; i < new_node_page->num_of_keys; i++) {
     child = new_node_page->entries[i].page_num;
     if (child != PAGE_NULL) {
       file_read_page(child, &tmp_child_page);
       page_header_t *child_page_header = (page_header_t *)&tmp_child_page;
-      child_page_header->parent_page_num = new_node;
+      child_page_header->parent_page_num = new_node_num;
       file_write_page(child, (page_t *)child_page_header);
     }
   }
 
-  /* Insert a new key into the parent of the two
-   * nodes resulting from the split, with
-   * the old node to the left and the new to the right.
-   */
+  return k_prime;
+}
+
+/**
+ * Splits a node into two by inserting a new key and pointer into the internal
+ * node and passes the split information to the parent
+ */
+int insert_into_node_after_splitting(pagenum_t old_node, int64_t left_index,
+                                     int64_t key, pagenum_t right) {
+
+  pagenum_t new_node_num;
+  int64_t k_prime;
+  entry_t *temp_entries;
+
+  page_t tmp_old_page;
+  file_read_page(old_node, &tmp_old_page);
+  internal_page_t *old_node_page = (internal_page_t *)&tmp_old_page;
+
+  temp_entries =
+      prepare_entries_for_split(old_node_page, left_index, key, right);
+
+  new_node_num = make_node(INTERNAL);
+  page_t tmp_new_page;
+  file_read_page(new_node_num, &tmp_new_page);
+  internal_page_t *new_node_page = (internal_page_t *)&tmp_new_page;
+
+  k_prime = distribute_entries_and_update_children(
+      old_node, old_node_page, new_node_num, new_node_page, temp_entries);
+
+  free(temp_entries);
 
   file_write_page(old_node, (page_t *)old_node_page);
-  file_write_page(new_node, (page_t *)new_node_page);
+  file_write_page(new_node_num, (page_t *)new_node_page);
 
-  return insert_into_parent(old_node, k_prime, new_node);
+  return insert_into_parent(old_node, k_prime, new_node_num);
 }
 
 /* Inserts a new node (leaf or internal node) into the B+ tree.
@@ -846,7 +934,6 @@ int insert_into_parent(pagenum_t left, int64_t key, pagenum_t right) {
   int left_index;
   pagenum_t parent;
 
-  // left 페이지 읽기
   page_t tmp_left_page;
   file_read_page(left, &tmp_left_page);
   page_header_t *left_page_header = (page_header_t *)&tmp_left_page;
@@ -854,7 +941,6 @@ int insert_into_parent(pagenum_t left, int64_t key, pagenum_t right) {
   parent = left_page_header->parent_page_num;
 
   /* Case: new root. */
-
   if (parent == PAGE_NULL) {
     return insert_into_new_root(left, key, right);
   }
@@ -873,7 +959,6 @@ int insert_into_parent(pagenum_t left, int64_t key, pagenum_t right) {
 
   /* Simple case: the new key fits into the node.
    */
-
   if (parent_page_header->num_of_keys < INTERNAL_ORDER - 1) {
     return insert_into_node(parent, left_index, key, right);
   }
@@ -881,7 +966,6 @@ int insert_into_parent(pagenum_t left, int64_t key, pagenum_t right) {
   /* Harder case:  split a node in order
    * to preserve the B+ tree properties.
    */
-
   return insert_into_node_after_splitting(parent, left_index, key, right);
 }
 
@@ -961,7 +1045,7 @@ void init_header_page() {
   header_page_t *header_page = (header_page_t *)&header_buf;
   header_page->num_of_pages = HEADER_PAGE_POS + 1;
 
-  file_write_page(HEADER_PAGE_POS, (header_page_t *)header_page);
+  file_write_page(HEADER_PAGE_POS, (page_t *)header_page);
 }
 
 void link_header_page(pagenum_t root) {
@@ -970,7 +1054,7 @@ void link_header_page(pagenum_t root) {
   header_page_t *header_page = (header_page_t *)&header_buf;
   header_page->root_page_num = root;
 
-  file_write_page(HEADER_PAGE_POS, (header_page_t *)header_page);
+  file_write_page(HEADER_PAGE_POS, (page_t *)header_page);
 }
 
 /* Master insertion function.
@@ -994,7 +1078,7 @@ int insert(int64_t key, char *value) {
   /* Case: the tree does not exist yet.
    * Start a new tree.
    */
-  header_page_t header_page_buf;
+  page_t header_page_buf;
   file_read_page(HEADER_PAGE_POS, &header_page_buf);
   header_page_t *h_page = (header_page_t *)&header_page_buf;
 
@@ -1006,12 +1090,10 @@ int insert(int64_t key, char *value) {
   /* Case: the tree already exists.
    * (Rest of function body.)
    */
-
   leaf = find_leaf(key);
 
   /* Case: leaf has room for key and pointer.
    */
-
   page_t tmp_leaf_page;
   file_read_page(leaf, &tmp_leaf_page);
   leaf_page_t *leaf_page = (leaf_page_t *)&tmp_leaf_page;
@@ -1022,7 +1104,6 @@ int insert(int64_t key, char *value) {
 
   /* Case:  leaf must be split.
    */
-
   return insert_into_leaf_after_splitting(leaf, key, value);
 }
 
@@ -1113,6 +1194,78 @@ pagenum_t adjust_root(pagenum_t root) {
   return new_root;
 }
 
+/**
+ * helper function for coalesce nodes
+ * @brief Handles the merging logic of internal nodes
+ * Insert k_prime, copy target's entry, and update the child's parent pointer
+ */
+void coalesce_internal_nodes(page_t *neighbor_buf, page_t *target_buf,
+                             int neighbor_num, int64_t k_prime) {
+  page_header_t *neighbor_header = (page_header_t *)neighbor_buf;
+  internal_page_t *neighbor_internal = (internal_page_t *)neighbor_buf;
+  internal_page_t *target_internal = (internal_page_t *)target_buf;
+
+  int neighbor_insertion_index = neighbor_header->num_of_keys;
+
+  // Append k_prime and the target's one_more_page_num pointer
+  neighbor_internal->entries[neighbor_insertion_index].key = k_prime;
+  neighbor_internal->entries[neighbor_insertion_index].page_num =
+      target_internal->one_more_page_num;
+  neighbor_header->num_of_keys++;
+
+  // Append all pointers and keys from target (excluding target's
+  // one_more_page_num
+  for (int i = neighbor_insertion_index + 1, j = 0;
+       j < target_internal->num_of_keys; i++, j++) {
+    neighbor_internal->entries[i] = target_internal->entries[j];
+    neighbor_header->num_of_keys++;
+  }
+  target_internal->num_of_keys = 0;
+
+  // Update parent pointers for all children copied from target
+  pagenum_t child_num =
+      neighbor_internal->entries[neighbor_insertion_index].page_num;
+  if (child_num != PAGE_NULL) {
+    page_t child_buf;
+    file_read_page(child_num, &child_buf);
+    ((page_header_t *)&child_buf)->parent_page_num = neighbor_num;
+    file_write_page(child_num, &child_buf);
+  }
+  for (int i = neighbor_insertion_index + 1; i < neighbor_header->num_of_keys;
+       i++) {
+    child_num = neighbor_internal->entries[i].page_num;
+    if (child_num != PAGE_NULL) {
+      page_t child_buf;
+      file_read_page(child_num, &child_buf);
+      ((page_header_t *)&child_buf)->parent_page_num = neighbor_num;
+      file_write_page(child_num, &child_buf);
+    }
+  }
+}
+
+/**
+ * helper function for coalesce nodes
+ * @brief Handles the merging logic of leaf nodes
+ * Copy records from target and update right_sibling_page_num
+ */
+void coalesce_leaf_nodes(page_t *neighbor_buf, page_t *target_buf) {
+  page_header_t *neighbor_header = (page_header_t *)neighbor_buf;
+  leaf_page_t *neighbor_leaf = (leaf_page_t *)neighbor_buf;
+  leaf_page_t *target_leaf = (leaf_page_t *)target_buf;
+
+  int neighbor_insertion_index = neighbor_header->num_of_keys;
+
+  // Append all records from target to neighbor
+  for (int i = neighbor_insertion_index, j = 0; j < target_leaf->num_of_keys;
+       i++, j++) {
+    neighbor_leaf->records[i] = target_leaf->records[j];
+    neighbor_header->num_of_keys++;
+  }
+
+  // Update neighbor's right sibling pointer
+  neighbor_leaf->right_sibling_page_num = target_leaf->right_sibling_page_num;
+}
+
 /* Coalesces a node that has become
  * too small after deletion
  * with a neighboring node that
@@ -1121,108 +1274,197 @@ pagenum_t adjust_root(pagenum_t root) {
  */
 int coalesce_nodes(pagenum_t target_num, pagenum_t neighbor_num,
                    int kprime_index_from_get, int64_t k_prime) {
-
-  /* Swap neighbor with node if node is on the
-   * extreme left and neighbor is to its right.
-   */
-  int k_prime_index;
+  // Swap neighbor with target if target is on the extreme left
   if (kprime_index_from_get == -1) {
     pagenum_t tmp_num = target_num;
     target_num = neighbor_num;
     neighbor_num = tmp_num;
-    k_prime_index = 0;
-  } else {
-    k_prime_index = kprime_index_from_get;
   }
 
-  /* Starting point in the neighbor for copying
-   * keys and pointers from target.
-   * Recall that target and neighbor have swapped places
-   * in the special case of target being a leftmost child.
-   */
-
   page_t neighbor_buf, target_buf;
-  pagenum_t parent_num;
   file_read_page(neighbor_num, &neighbor_buf);
   file_read_page(target_num, &target_buf);
 
   page_header_t *neighbor_header = (page_header_t *)&neighbor_buf;
   page_header_t *target_header = (page_header_t *)&target_buf;
 
-  int neighbor_insertion_index = neighbor_header->num_of_keys;
-
-  parent_num = target_header->parent_page_num;
-
-  /* Case:  nonleaf node.
-   * Append k_prime and the following pointer.
-   * Append all pointers and keys from the neighbor.
-   */
+  pagenum_t parent_num = target_header->parent_page_num;
 
   if (target_header->is_leaf == INTERNAL) {
-    internal_page_t *neighbor_internal = (internal_page_t *)&neighbor_buf;
-    internal_page_t *target_internal = (internal_page_t *)&target_buf;
-
-    /* Append k_prime. neighbor <= target
-     */
-
-    neighbor_internal->entries[neighbor_insertion_index].key = k_prime;
-    neighbor_internal->entries[neighbor_insertion_index].page_num =
-        target_internal->one_more_page_num;
-    neighbor_header->num_of_keys++;
-
-    for (int i = neighbor_insertion_index + 1, j = 0;
-         j < target_internal->num_of_keys; i++, j++) {
-      neighbor_internal->entries[i] = target_internal->entries[j];
-      neighbor_header->num_of_keys++;
-    }
-    target_internal->num_of_keys = 0;
-
-    /* All children must now point up to the same parent.
-     */
-    // make neightbor's one_more_page_num point to same parent
-    pagenum_t child_num =
-        neighbor_internal->entries[neighbor_insertion_index].page_num;
-    if (child_num != PAGE_NULL) {
-      page_t child_buf;
-      file_read_page(child_num, &child_buf);
-      ((page_header_t *)&child_buf)->parent_page_num = neighbor_num;
-      file_write_page(child_num, &child_buf);
-    }
-    // make rest point to same parent
-    for (int i = neighbor_insertion_index + 1; i < neighbor_header->num_of_keys;
-         i++) {
-      child_num = neighbor_internal->entries[i].page_num;
-      if (child_num != PAGE_NULL) {
-        page_t child_buf;
-        file_read_page(child_num, &child_buf);
-        ((page_header_t *)&child_buf)->parent_page_num = neighbor_num;
-        file_write_page(child_num, &child_buf);
-      }
-    }
+    coalesce_internal_nodes(&neighbor_buf, &target_buf, neighbor_num, k_prime);
+  } else {
+    coalesce_leaf_nodes(&neighbor_buf, &target_buf);
   }
 
-  /* In a leaf, append the keys and pointers of
-   * target to the neighbor.
-   * Set the neighbor's last pointer to point to
-   * what had been target's right neighbor.
-   */
-
-  else {
-    leaf_page_t *neighbor_leaf = (leaf_page_t *)&neighbor_buf;
-    leaf_page_t *target_leaf = (leaf_page_t *)&target_buf;
-
-    for (int i = neighbor_insertion_index, j = 0; j < target_leaf->num_of_keys;
-         i++, j++) {
-      neighbor_leaf->records[i] = target_leaf->records[j];
-      neighbor_header->num_of_keys++;
-    }
-
-    neighbor_leaf->right_sibling_page_num = target_leaf->right_sibling_page_num;
-  }
-  file_write_page(neighbor_num, &neighbor_buf);
+  file_write_page(neighbor_num, (page_t *)&neighbor_buf);
   file_free_page(target_num);
 
+  // Remove the separator key from the parent
   return delete_entry(parent_num, k_prime, NULL);
+}
+
+/**
+ * helper function for redistribute nodes
+ * @brief Redistributes entries from the left neighbor node to the target node
+ */
+void redistribute_from_left(pagenum_t target_num, page_t *target_buf,
+                            page_t *neighbor_buf, internal_page_t *parent_page,
+                            int k_prime_index, int k_prime) {
+  page_header_t *target_header = (page_header_t *)target_buf;
+
+  if (target_header->is_leaf == INTERNAL) {
+    redistribute_internal_from_left(target_num, target_buf, neighbor_buf,
+                                    parent_page, k_prime_index, k_prime);
+  } else {
+    redistribute_leaf_from_left(target_buf, neighbor_buf, parent_page,
+                                k_prime_index);
+  }
+}
+
+/**
+ * helper function for redistribute nodes
+ * @brief Move the last entry of the left neighbor node from the internal node
+ * to the first * position of the target node
+ */
+void redistribute_internal_from_left(pagenum_t target_num, page_t *target_buf,
+                                     page_t *neighbor_buf,
+                                     internal_page_t *parent_page,
+                                     int k_prime_index, int k_prime) {
+  page_header_t *target_header = (page_header_t *)target_buf;
+  internal_page_t *target_internal = (internal_page_t *)target_buf;
+  internal_page_t *neighbor_internal = (internal_page_t *)neighbor_buf;
+  page_header_t *neighbor_header = (page_header_t *)neighbor_buf;
+
+  for (int index = target_header->num_of_keys; index > 0; index--) {
+    target_internal->entries[index] = target_internal->entries[index - 1];
+  }
+  target_internal->entries[0].page_num = target_internal->one_more_page_num;
+
+  target_internal->entries[0].key = k_prime;
+
+  pagenum_t last_num_neighbor =
+      neighbor_internal->entries[neighbor_header->num_of_keys - 1].page_num;
+  target_internal->one_more_page_num = last_num_neighbor;
+
+  if (last_num_neighbor != PAGE_NULL) {
+    page_t child_buf;
+    file_read_page(last_num_neighbor, &child_buf);
+    ((page_header_t *)&child_buf)->parent_page_num = target_num;
+    file_write_page(last_num_neighbor, &child_buf);
+  }
+
+  parent_page->entries[k_prime_index].key =
+      neighbor_internal->entries[neighbor_header->num_of_keys - 1].key;
+
+  memset(&neighbor_internal->entries[neighbor_header->num_of_keys - 1], 0,
+         sizeof(entry_t));
+}
+
+/**
+ * helper function for redistribute nodes
+ * @brief Move the last record of the left neighboring node from the leaf node
+ * to the first position of the target node
+ */
+void redistribute_leaf_from_left(page_t *target_buf, page_t *neighbor_buf,
+                                 internal_page_t *parent_page,
+                                 int k_prime_index) {
+  page_header_t *target_header = (page_header_t *)target_buf;
+  leaf_page_t *target_leaf = (leaf_page_t *)target_buf;
+  leaf_page_t *neighbor_leaf = (leaf_page_t *)neighbor_buf;
+  page_header_t *neighbor_header = (page_header_t *)neighbor_buf;
+
+  for (int i = target_header->num_of_keys; i > 0; i--) {
+    target_leaf->records[i] = target_leaf->records[i - 1];
+  }
+
+  target_leaf->records[0] =
+      neighbor_leaf->records[neighbor_header->num_of_keys - 1];
+
+  parent_page->entries[k_prime_index].key = target_leaf->records[0].key;
+
+  memset(&neighbor_leaf->records[neighbor_header->num_of_keys - 1], 0,
+         sizeof(record_t));
+}
+
+/**
+ * helper function for redistribute nodes
+ * @brief Redistributes entries from the right neighbor node to the target node
+ */
+void redistribute_from_right(pagenum_t target_num, page_t *target_buf,
+                             page_t *neighbor_buf, internal_page_t *parent_page,
+                             int k_prime_index, int k_prime) {
+  page_header_t *target_header = (page_header_t *)target_buf;
+
+  if (target_header->is_leaf == INTERNAL) {
+    redistribute_internal_from_right(target_num, target_buf, neighbor_buf,
+                                     parent_page, k_prime_index, k_prime);
+  } else {
+    redistribute_leaf_from_right(target_buf, neighbor_buf, parent_page,
+                                 k_prime_index);
+  }
+}
+
+/**
+ * helper function for redistribute nodes
+ * @brief Move the first entry of the right neighbor node from the internal node
+ * to the last position of the target node
+ */
+void redistribute_internal_from_right(pagenum_t target_num, page_t *target_buf,
+                                      page_t *neighbor_buf,
+                                      internal_page_t *parent_page,
+                                      int k_prime_index, int k_prime) {
+  page_header_t *target_header = (page_header_t *)target_buf;
+  internal_page_t *target_internal = (internal_page_t *)target_buf;
+  internal_page_t *neighbor_internal = (internal_page_t *)neighbor_buf;
+  page_header_t *neighbor_header = (page_header_t *)neighbor_buf;
+
+  target_internal->entries[target_header->num_of_keys].key = k_prime;
+
+  pagenum_t num_from_neighbor = neighbor_internal->one_more_page_num;
+  target_internal->entries[target_header->num_of_keys].page_num =
+      num_from_neighbor;
+
+  if (num_from_neighbor != PAGE_NULL) {
+    page_t child_buf;
+    file_read_page(num_from_neighbor, &child_buf);
+    ((page_header_t *)&child_buf)->parent_page_num = target_num;
+    file_write_page(num_from_neighbor, &child_buf);
+  }
+
+  parent_page->entries[k_prime_index].key = neighbor_internal->entries[0].key;
+
+  neighbor_internal->one_more_page_num = neighbor_internal->entries[0].page_num;
+  for (int i = 0; i < neighbor_header->num_of_keys - 1; i++) {
+    neighbor_internal->entries[i] = neighbor_internal->entries[i + 1];
+  }
+
+  memset(&neighbor_internal->entries[neighbor_header->num_of_keys - 1], 0,
+         sizeof(entry_t));
+}
+
+/**
+ * helper function for redistribute nodes
+ * @brief Move the first record of the right neighboring node from the leaf node
+ * to the last position of the target node
+ */
+void redistribute_leaf_from_right(page_t *target_buf, page_t *neighbor_buf,
+                                  internal_page_t *parent_page,
+                                  int k_prime_index) {
+  page_header_t *target_header = (page_header_t *)target_buf;
+  leaf_page_t *target_leaf = (leaf_page_t *)target_buf;
+  leaf_page_t *neighbor_leaf = (leaf_page_t *)neighbor_buf;
+  page_header_t *neighbor_header = (page_header_t *)neighbor_buf;
+
+  target_leaf->records[target_header->num_of_keys] = neighbor_leaf->records[0];
+
+  parent_page->entries[k_prime_index].key = neighbor_leaf->records[1].key;
+
+  for (int i = 0; i < neighbor_header->num_of_keys - 1; i++) {
+    neighbor_leaf->records[i] = neighbor_leaf->records[i + 1];
+  }
+
+  memset(&neighbor_leaf->records[neighbor_header->num_of_keys - 1], 0,
+         sizeof(record_t));
 }
 
 /* Redistributes entries between two nodes when
@@ -1245,124 +1487,18 @@ int redistribute_nodes(pagenum_t target_num, pagenum_t neighbor_num,
   file_read_page(parent_num, &parent_buf);
   internal_page_t *parent_page = (internal_page_t *)&parent_buf;
 
-  /* Case: target has a neighbor to the left.
-   * Pull the neighbor's last key-pointer pair over
-   * from the neighbor's right end to target's left end.
-   */
-
+  /// target is not leftmost, so neighbor is to the left
   if (kprime_index_from_get != -1) {
-    if (target_header->is_leaf == INTERNAL) {
-      internal_page_t *target_internal = (internal_page_t *)&target_buf;
-      internal_page_t *neighbor_internal = (internal_page_t *)&neighbor_buf;
-
-      // target's left 공간 확보
-      for (int index = target_header->num_of_keys; index > 0; index--) {
-        target_internal->entries[index] = target_internal->entries[index - 1];
-      }
-      target_internal->entries[0].page_num = target_internal->one_more_page_num;
-
-      // target의 K0는 k_prime(부모키)으로
-      target_internal->entries[0].key = k_prime;
-      // target의 첫번째 값을 neighbor의 마지막 값으로 설정
-      pagenum_t last_num_neighbor =
-          neighbor_internal->entries[neighbor_header->num_of_keys - 1].page_num;
-      target_internal->one_more_page_num = last_num_neighbor;
-
-      if (last_num_neighbor != PAGE_NULL) {
-        page_t child_buf;
-        file_read_page(last_num_neighbor, &child_buf);
-        ((page_header_t *)&child_buf)->parent_page_num = target_num;
-        file_write_page(last_num_neighbor, &child_buf);
-      }
-      // target의 부모 키를 neightbor의 마지막 키로 설정
-      parent_page->entries[k_prime_index].key =
-          neighbor_internal->entries[neighbor_header->num_of_keys - 1].key;
-
-      memset(&neighbor_internal->entries[neighbor_header->num_of_keys - 1], 0,
-             sizeof(entry_t));
-    } else {
-      // target is not leftmost && leaf case
-      leaf_page_t *target_leaf = (leaf_page_t *)&target_buf;
-      leaf_page_t *neighbor_leaf = (leaf_page_t *)&neighbor_buf;
-
-      for (int i = target_header->num_of_keys; i > 0; i--) {
-        target_leaf->records[i] = target_leaf->records[i - 1];
-      }
-
-      target_leaf->records[0] =
-          neighbor_leaf->records[neighbor_header->num_of_keys - 1];
-
-      parent_page->entries[k_prime_index].key = target_leaf->records[0].key;
-
-      memset(&neighbor_leaf->records[neighbor_header->num_of_keys - 1], 0,
-             sizeof(record_t));
-    }
+    redistribute_from_left(target_num, &target_buf, &neighbor_buf, parent_page,
+                           k_prime_index, k_prime);
   }
-
-  /* Case: target is the leftmost child.
-   * Take a key-pointer pair from the neighbor to the right.
-   * Move the neighbor's leftmost key-pointer pair
-   * to target's rightmost position.
-   */
-
+  // target is leftmost, so neighbor is to the right
   else {
-    if (target_header->is_leaf == INTERNAL) {
-      internal_page_t *target_internal = (internal_page_t *)&target_buf;
-      internal_page_t *neighbor_internal = (internal_page_t *)&neighbor_buf;
-
-      // target의 마지막 key에 k_prime(부모키) 설정
-      target_internal->entries[target_header->num_of_keys].key = k_prime;
-
-      // target의 마지막 entry에 neighbor의 onemorepagenum으로
-      pagenum_t num_from_neighbor = neighbor_internal->one_more_page_num;
-      target_internal->entries[target_header->num_of_keys].page_num =
-          num_from_neighbor;
-
-      // 자식의 부모 포인터 업데이트
-      if (num_from_neighbor != PAGE_NULL) {
-        page_t child_buf;
-        file_read_page(num_from_neighbor, &child_buf);
-        ((page_header_t *)&child_buf)->parent_page_num = target_num;
-        file_write_page(num_from_neighbor, &child_buf);
-      }
-
-      // target의 부모 키(k_prime 위치)를 neighbor의 첫번째 키로
-      parent_page->entries[k_prime_index].key =
-          neighbor_internal->entries[0].key;
-
-      // neighbor 한칸씩 왼쪽으로 당기기
-      neighbor_internal->one_more_page_num =
-          neighbor_internal->entries[0].page_num;
-      for (int i = 0; i < neighbor_header->num_of_keys - 1; i++) {
-        neighbor_internal->entries[i] = neighbor_internal->entries[i + 1];
-      }
-
-      memset(&neighbor_internal->entries[neighbor_header->num_of_keys - 1], 0,
-             sizeof(entry_t));
-
-    } else { // leaf nod
-
-      leaf_page_t *target_leaf = (leaf_page_t *)&target_buf;
-      leaf_page_t *neighbor_leaf = (leaf_page_t *)&neighbor_buf;
-
-      target_leaf->records[target_header->num_of_keys] =
-          neighbor_leaf->records[0];
-
-      parent_page->entries[k_prime_index].key = neighbor_leaf->records[1].key;
-
-      for (int i = 0; i < neighbor_header->num_of_keys - 1; i++) {
-        neighbor_leaf->records[i] = neighbor_leaf->records[i + 1];
-      }
-
-      memset(&neighbor_leaf->records[neighbor_header->num_of_keys - 1], 0,
-             sizeof(record_t));
-    }
+    redistribute_from_right(target_num, &target_buf, &neighbor_buf, parent_page,
+                            k_prime_index, k_prime);
   }
 
-  /* n now has one more key and one more pointer;
-   * the neighbor has one fewer of each.
-   */
-
+  // Update key counts and write back pages
   target_header->num_of_keys++;
   neighbor_header->num_of_keys--;
 
@@ -1375,7 +1511,7 @@ int redistribute_nodes(pagenum_t target_num, pagenum_t neighbor_num,
 
 /**
  * @brief remove record from leaf node, if success return SUCCESS(0) else
- * FAILURE(1)
+ * FAILURE(-1)
  */
 int remove_record_from_node(leaf_page_t *target_page, int64_t key,
                             char *value) {
@@ -1401,7 +1537,7 @@ int remove_record_from_node(leaf_page_t *target_page, int64_t key,
 
 /**
  * @brief remove entry from internal node, if success return SUCCESS(0) else
- * FAILURE(1)
+ * FAILURE(-1)
  */
 int remove_entry_from_node(internal_page_t *target_page, int64_t key) {
   // Remove the key and shift other keys accordingly.
@@ -1424,21 +1560,91 @@ int remove_entry_from_node(internal_page_t *target_page, int64_t key) {
   return SUCCESS;
 }
 
+/**
+ * helper function for delete entry
+ * @brief Find the distinguishing key information of neighboring nodes and
+ * parents to handle underflow
+ */
+int find_neighbor_and_kprime(pagenum_t target_node,
+                             internal_page_t *parent_page,
+                             page_header_t *target_header,
+                             pagenum_t *neighbor_num_out,
+                             int *k_prime_key_index_out) {
+
+  int kprime_index_from_get = get_kprime_index(target_node);
+
+  if (kprime_index_from_get == -1) {
+    // target is P0 neighbor P1
+    *neighbor_num_out = parent_page->entries[0].page_num;
+    *k_prime_key_index_out = 0;
+  } else {
+    // target is Pi neighbor Pi-1.
+    int target_pointer_index =
+        kprime_index_from_get; // Index of the pointer to target
+
+    *k_prime_key_index_out = target_pointer_index;
+
+    if (target_pointer_index == 0) {
+      // target is P1 (entries[0].page_num) neighbor P0
+      *neighbor_num_out = parent_page->one_more_page_num;
+    } else {
+      // target is Pi+1 (entries[i].page_num, i > 0) neighbor is Pi
+      *neighbor_num_out =
+          parent_page->entries[target_pointer_index - 1].page_num;
+    }
+  }
+  return kprime_index_from_get;
+}
+
+/**
+ * helper function for delete entry
+ * @brief Handles node underflow.
+ * Finds neighboring nodes and decides whether to merge or redistribute them and
+ * call
+ */
+int handle_underflow(pagenum_t target_node) {
+  page_t node_buf, parent_buf;
+  file_read_page(target_node, &node_buf);
+  page_header_t *node_header = (page_header_t *)&node_buf;
+  pagenum_t parent_num = node_header->parent_page_num;
+
+  file_read_page(parent_num, &parent_buf);
+  internal_page_t *parent_page = (internal_page_t *)&parent_buf;
+
+  pagenum_t neighbor_num;
+  int k_prime_key_index;
+
+  int kprime_index_from_get = find_neighbor_and_kprime(
+      target_node, parent_page, node_header, &neighbor_num, &k_prime_key_index);
+
+  int64_t k_prime = parent_page->entries[k_prime_key_index].key;
+
+  page_t neighbor_buf;
+  file_read_page(neighbor_num, &neighbor_buf);
+  page_header_t *neighbor_header = (page_header_t *)&neighbor_buf;
+
+  int capacity = node_header->is_leaf ? RECORD_CNT : ENTRY_CNT - 1;
+
+  if (neighbor_header->num_of_keys + node_header->num_of_keys < capacity) {
+    return coalesce_nodes(target_node, neighbor_num, kprime_index_from_get,
+                          k_prime);
+  } else {
+    return redistribute_nodes(target_node, neighbor_num, kprime_index_from_get,
+                              k_prime_key_index, k_prime);
+  }
+}
+
 /* Deletes an entry from the B+ tree.
  * Removes the record and its key and pointer
  * from the leaf, and then makes all appropriate
  * changes to preserve the B+ tree properties.
  */
 int delete_entry(pagenum_t target_node, int64_t key, char *value) {
-  int min_keys;
-  int k_prime_index;
-
-  // Remove key and pointer from node.
-
   page_t node_buf;
   file_read_page(target_node, &node_buf);
   page_header_t *node_header = (page_header_t *)&node_buf;
 
+  // Case: Remove key and pointer from node
   int remove_result = FAILURE;
   switch (node_header->is_leaf) {
   case LEAF:
@@ -1449,17 +1655,17 @@ int delete_entry(pagenum_t target_node, int64_t key, char *value) {
     remove_result = remove_entry_from_node((internal_page_t *)&node_buf, key);
     break;
   default:
-    perror("delete_entry error");
-    break;
+    perror("delete_entry error: Unknown node type");
+    return FAILURE;
   }
+
   if (remove_result != SUCCESS) {
     return FAILURE;
   }
   file_write_page(target_node, (page_t *)&node_buf);
 
-  /* Case:  deletion from the root.
-   */
-  header_page_t header_buf;
+  // Case: Deletion from the root
+  page_t header_buf;
   file_read_page(HEADER_PAGE_POS, &header_buf);
   header_page_t *header_page = (header_page_t *)&header_buf;
 
@@ -1467,79 +1673,13 @@ int delete_entry(pagenum_t target_node, int64_t key, char *value) {
     return adjust_root(header_page->root_page_num);
   }
 
-  /* Case:  deletion from a node below the root.
-   * (Rest of function body.)
-   */
-
-  /* Determine minimum allowable size of node,
-   * to be preserved after deletion.
-   */
-
-  /* Case:  node stays at or above minimum.
-   * (The simple case.)
-   */
-
+  // Case: Node stays at or above minimum. (The simple case)
   if (node_header->num_of_keys >= MIN_KEYS) {
     return SUCCESS;
   }
 
-  /* Case:  node falls below minimum.
-   * Either coalescence or redistribution
-   * is needed.
-   */
-  /* Find the appropriate neighbor node with which
-   * to coalesce.
-   * Also find the key (k_prime) in the parent
-   * between the pointer to node n and the pointer
-   * to the neighbor.
-   */
-  pagenum_t neighbor_num_correct;
-  int kprime_index_from_get = get_kprime_index(target_node);
-  int k_prime_key_index; // Index of the key K that separates the two nodes
-
-  pagenum_t parent_num = node_header->parent_page_num;
-  page_t parent_buf;
-  file_read_page(parent_num, &parent_buf);
-  internal_page_t *parent_page = (internal_page_t *)&parent_buf;
-
-  if (kprime_index_from_get == -1) {
-    // target is P0 (one_more_page_num) must use right neighbor P1.
-    neighbor_num_correct = parent_page->entries[0].page_num;
-    k_prime_key_index = 0;
-  } else {
-    // target is Pi (i >= 0, P1~) use left neighbor Pi-1.
-    k_prime_key_index = kprime_index_from_get;
-
-    if (k_prime_key_index == 0) {
-      // target is P1 (entries[0].page_num) neighbor is P0.
-      neighbor_num_correct = parent_page->one_more_page_num;
-    } else {
-      // target is Pi+1 (entries[i].page_num, i > 0) neighbor is Pi.
-      neighbor_num_correct =
-          parent_page->entries[k_prime_key_index - 1].page_num;
-    }
-  }
-
-  int64_t k_prime = parent_page->entries[k_prime_key_index].key;
-
-  page_t neighbor_buf;
-  file_read_page(neighbor_num_correct, &neighbor_buf);
-  page_header_t *neighbor_header = (page_header_t *)&neighbor_buf;
-
-  /* Coalescence. */
-  int capacity = node_header->is_leaf ? RECORD_CNT : ENTRY_CNT - 1;
-  if (neighbor_header->num_of_keys + node_header->num_of_keys < capacity) {
-    return coalesce_nodes(target_node, neighbor_num_correct,
-                          kprime_index_from_get, k_prime);
-  }
-  /* Redistribution. */
-  else {
-    // k_prime_index_from_get is the index of the pointer to the target node
-    // k_prime_key_index is the index of the separating key in the parent
-    return redistribute_nodes(target_node, neighbor_num_correct,
-                              kprime_index_from_get, k_prime_key_index,
-                              k_prime);
-  }
+  // Case: Node falls below minimum (underflow)
+  return handle_underflow(target_node);
 }
 
 /* Master deletion function.
