@@ -53,9 +53,9 @@ pagenum_t make_node(uint32_t isleaf) {
   return new_page_num;
 }
 
-// /* Creates a new leaf by creating a node
-//  * and then adapting it appropriately.
-//  */
+/* Creates a new leaf by creating a node
+ * and then adapting it appropriately.
+ */
 pagenum_t make_leaf(void) { return make_node(LEAF); }
 
 /* Finds the index within the parent's 'entries' array
