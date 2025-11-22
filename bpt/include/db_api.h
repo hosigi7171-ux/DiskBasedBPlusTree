@@ -7,7 +7,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-extern const char DB_NAME[];
 extern int global_table_id; // for future extension
 
 int open_table(char *pathname);
