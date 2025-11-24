@@ -28,8 +28,9 @@ Ubuntu 24.04.3 LTS (GNU/Linux 5.15.167.4-microsoft-standard-WSL2 x86_64)
 
 실행:
 
+- main파일 생성: `make` (Makefile있는 폴더에서)
 - main파일을 실행: `./main`
-- libbpt.a라이브러리를 다시 만들기: `make` (Makefile 참고)
+- libbpt.a라이브러리를 생성: `make` (Makefile 참고)
 - libbpt.a라이브러리를 이용: `#include "libbpt.a"` (test/library_test.c 참고)
 - B+ 트리 로직 테스트 실행: `ceedling test:all` (project.yml 참고)
 - 파일 매니저 테스트 실행: `gcc -I../include ../src/file.c file_test.c -o file_test`
