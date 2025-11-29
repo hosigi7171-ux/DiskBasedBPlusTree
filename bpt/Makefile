@@ -1,44 +1,36 @@
-all: clean $(TARGET)
+TARGET = main
+SRCDIR = src
+LIBS = lib
+CFLAGS = -g -fPIC -I include
 
-.SUFFIXES: .c .o
+TARGET_SRC = $(SRCDIR)/main.c
+TARGET_OBJ = $(TARGET_SRC:.c=.o)
 
-CC=gcc
+SRCS_FOR_LIB = $(SRCDIR)/bptree/bptree.c \
+               $(SRCDIR)/bptree/bptree_utils.c \
+               $(SRCDIR)/bptree/bptree_insert.c \
+               $(SRCDIR)/bptree/bptree_delete.c \
+               $(SRCDIR)/bptree/bptree_find.c \
+               $(SRCDIR)/db_api.c \
+               $(SRCDIR)/file.c
 
-SRCDIR=src/
-INC=include/
-LIBS=lib/
+OBJS_FOR_LIB = $(SRCS_FOR_LIB:.c=.o)
 
-# SRCS:=$(wildcard src/*.c)
-# OBJS:=$(SRCS:.c=.o)
+.PHONY: all clean static_library library
 
-# main source file
-TARGET_SRC:=$(SRCDIR)main.c
-TARGET_OBJ:=$(SRCDIR)main.o
+all: static_library $(TARGET)
 
-# Include more files if you write another source file.
-SRCS_FOR_LIB:=$(SRCDIR)/bptree/bptree.c $(SRCDIR)/bptree/bptree_utils.c $(SRCDIR)/bptree/bptree_insert.c $(SRCDIR)/bptree/bptree_delete.c $(SRCDIR)/bptree/bptree_find.c $(SRCDIR)db_api.c $(SRCDIR)file.c
-OBJS_FOR_LIB:=$(SRCS_FOR_LIB:.c=.o)
-
-CFLAGS+= -g -fPIC -I $(INC)
-
-TARGET=main
-
-all: $(TARGET)
-
-OBJS_FOR_LIB := $(SRCS_FOR_LIB:.c=.o)
-
+# Compile .o from .c
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Link main with static library
 $(TARGET): $(TARGET_OBJ) $(OBJS_FOR_LIB)
-	make static_library
-	$(CC) $(CFLAGS) -o $@ $^ -L $(LIBS) -lbpt
+	$(CC) $(CFLAGS) -o $@ $(TARGET_OBJ) -L $(LIBS) -lbpt
+
+# Create static library
+static_library: $(OBJS_FOR_LIB)
+	ar cr $(LIBS)/libbpt.a $(OBJS_FOR_LIB)
 
 clean:
-	rm $(TARGET) $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)*
-
-library:
-	gcc -shared -Wl,-soname,libbpt.so -o $(LIBS)libbpt.so $(OBJS_FOR_LIB)
-
-static_library:
-	ar cr $(LIBS)libbpt.a $(OBJS_FOR_LIB)
+	rm -f $(TARGET) $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)/libbpt.*
